@@ -4,6 +4,8 @@
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickStyle>
+#include <QTextDocument>
+#include <QTextLayout>
 
 #include "backend.h"
 #include "markdownhighlighter.h"
@@ -244,6 +246,49 @@ private slots:
         fallbackDocument.saveAsDialog();
         const QUrl fallbackUrl = fallbackDialogSpy.takeFirst().constFirst().toUrl();
         QCOMPARE(QFileInfo(fallbackUrl.toLocalFile()).absolutePath(), QDir::homePath());
+    }
+
+    void togglesFocusMode() {
+        Backend backend;
+        QSignalSpy focusSpy(&backend, &Backend::focusModeChanged);
+        QVERIFY(!backend.focusMode());
+
+        backend.toggleFocusMode();
+        QVERIFY(backend.focusMode());
+        QCOMPARE(focusSpy.count(), 1);
+
+        backend.toggleFocusMode();
+        QVERIFY(!backend.focusMode());
+        QCOMPARE(focusSpy.count(), 2);
+    }
+
+    void focusModeDimsInactiveBlocks() {
+        QTextDocument doc;
+        doc.setPlainText(QStringLiteral("First paragraph\n\nSecond paragraph"));
+        MarkdownHighlighter highlighter(&doc);
+
+        // Enable focus mode with cursor in the first block
+        highlighter.setFocusCursorPosition(0);
+        highlighter.setFocusMode(true);
+
+        // First block (active) should keep its original foreground
+        QTextBlock firstBlock = doc.findBlockByNumber(0);
+        QTextCharFormat firstFormat = firstBlock.layout()->formats().isEmpty()
+            ? QTextCharFormat()
+            : firstBlock.layout()->formats().first().format;
+
+        // Third block (inactive, "Second paragraph") should be dimmed
+        QTextBlock thirdBlock = doc.findBlockByNumber(2);
+        QVERIFY(!thirdBlock.layout()->formats().isEmpty());
+        QColor dimmedColor = thirdBlock.layout()->formats().first().format.foreground().color();
+        QVERIFY(dimmedColor.isValid());
+
+        // Move cursor to third block — it should un-dim, first should dim
+        highlighter.setFocusCursorPosition(thirdBlock.position());
+        QTextBlock updatedFirst = doc.findBlockByNumber(0);
+        QVERIFY(!updatedFirst.layout()->formats().isEmpty());
+        QColor nowDimmed = updatedFirst.layout()->formats().first().format.foreground().color();
+        QCOMPARE(nowDimmed, dimmedColor);
     }
 
 private:
