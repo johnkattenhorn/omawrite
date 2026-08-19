@@ -338,7 +338,9 @@ ApplicationWindow {
         modal: true
         title: "Keyboard shortcuts"
         standardButtons: Dialog.Close
-        anchors.centerIn: parent
+        width: Math.min(380, win.width - 48)
+        x: Math.round((win.width - width) / 2)
+        y: Math.round((win.height - height) / 2)
         contentItem: Label {
             text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+Shift+T  Focus Mode\nCtrl+?  Shortcuts"
             lineHeight: 1.5
