@@ -183,6 +183,36 @@ private slots:
         QCOMPARE(backend.folderEntries().size(), 1);
     }
 
+
+    void createsDocumentsAndFoldersWhereItBrowses() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+
+        Backend backend;
+        backend.setFolder(QUrl::fromLocalFile(folder.path()));
+
+        // A typed name is cleaned the same way a saved document's is, and
+        // gains the extension when it is missing.
+        const QUrl created = backend.createDocument(QStringLiteral("Field notes"));
+        QCOMPARE(created, QUrl::fromLocalFile(folder.filePath(QStringLiteral("Field notes.md"))));
+        QVERIFY(QFileInfo::exists(created.toLocalFile()));
+        QCOMPARE(Backend::sanitizedEntryName(QStringLiteral("a/b")), QStringLiteral("a-b"));
+
+        // An existing name is reported, never overwritten.
+        QVERIFY(backend.createDocument(QStringLiteral("Field notes.md")).isEmpty());
+        QCOMPARE(backend.status(), QStringLiteral("Field notes.md already exists."));
+
+        backend.createFolder(QStringLiteral("archive"));
+        QVERIFY(QFileInfo(folder.filePath(QStringLiteral("archive"))).isDir());
+
+        const QVariantList entries = backend.folderEntries();
+        QCOMPARE(entries.size(), 2);
+        QCOMPARE(entries.at(0).toMap().value(QStringLiteral("name")).toString(),
+                 QStringLiteral("archive"));
+        QCOMPARE(entries.at(1).toMap().value(QStringLiteral("name")).toString(),
+                 QStringLiteral("Field notes.md"));
+    }
+
     void keepsCursorAndSelectionStableAcrossInsertions() {
         const QString mutationsPath = QFINDTESTDATA("../src/EditorMutations.js");
         QVERIFY(!mutationsPath.isEmpty());
@@ -344,6 +374,223 @@ private slots:
 
         QVERIFY(QMetaObject::invokeMethod(filesButton, "clicked"));
         QCOMPARE(sidebar->property("width").toReal(), 0.0);
+    }
+
+
+    void walksTheSidebarWithTheKeyboard() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        QVERIFY(QDir(folder.path()).mkdir(QStringLiteral("archive")));
+        for (const QString &name : {QStringLiteral("one.md"), QStringLiteral("two.md")}) {
+            QFile file(folder.filePath(name));
+            QVERIFY(file.open(QIODevice::WriteOnly));
+        }
+
+        Backend backend;
+        backend.setFolder(QUrl::fromLocalFile(folder.path()));
+
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *sidebar = window->findChild<QObject *>(QStringLiteral("fileSidebar"));
+        QVERIFY(sidebar);
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "setSidebarOpen",
+                                          Q_ARG(QVariant, true)));
+
+        // archive/, one.md, two.md — moving down twice lands on the last row
+        // and stays there rather than wrapping.
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "selectNext"));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "selectNext"));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "selectNext"));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "activateSelection"));
+        QCOMPARE(backend.fileName(), QStringLiteral("two.md"));
+
+        // Enter on a folder walks into it; going up comes back.
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "selectPrevious"));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "selectPrevious"));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "activateSelection"));
+        QCOMPARE(backend.folderUrl(),
+                 QUrl::fromLocalFile(folder.filePath(QStringLiteral("archive"))));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "goUp"));
+        QCOMPARE(backend.folderUrl(), QUrl::fromLocalFile(folder.path()));
+    }
+
+    void createsAndOpensADocumentFromTheSidebar() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+
+        Backend backend;
+        backend.setFolder(QUrl::fromLocalFile(folder.path()));
+
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *sidebar = window->findChild<QObject *>(QStringLiteral("fileSidebar"));
+        QObject *nameField = window->findChild<QObject *>(QStringLiteral("newEntryField"));
+        QVERIFY(sidebar);
+        QVERIFY(nameField);
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "setSidebarOpen",
+                                          Q_ARG(QVariant, true)));
+
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "beginNewDocument"));
+        QVERIFY(sidebar->property("creating").toBool());
+        nameField->setProperty("text", QStringLiteral("Field notes"));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "commitNewEntry"));
+        QVERIFY(!sidebar->property("creating").toBool());
+
+        // The new document is created and opened, ready to be written in,
+        // with the selection left on it rather than back at the top.
+        QVERIFY(QFileInfo::exists(folder.filePath(QStringLiteral("Field notes.md"))));
+        QCOMPARE(backend.fileName(), QStringLiteral("Field notes.md"));
+        QCOMPARE(sidebar->property("selectedName").toString(),
+                 QStringLiteral("Field notes.md"));
+
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "beginNewFolder"));
+        nameField->setProperty("text", QStringLiteral("archive"));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "commitNewEntry"));
+        QVERIFY(QFileInfo(folder.filePath(QStringLiteral("archive"))).isDir());
+        QCOMPARE(sidebar->property("selectedName").toString(), QStringLiteral("archive"));
+
+        // An abandoned name creates nothing.
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "beginNewDocument"));
+        nameField->setProperty("text", QStringLiteral("discarded"));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "cancelNewEntry"));
+        QVERIFY(!QFileInfo::exists(folder.filePath(QStringLiteral("discarded.md"))));
+    }
+
+    void closesTheSidebarRatherThanReachingIntoIt() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        for (const QString &name : {QStringLiteral("one.md"), QStringLiteral("two.md")}) {
+            QFile file(folder.filePath(name));
+            QVERIFY(file.open(QIODevice::WriteOnly));
+        }
+
+        Backend backend;
+        backend.setFolder(QUrl::fromLocalFile(folder.path()));
+
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *sidebar = window->findChild<QObject *>(QStringLiteral("fileSidebar"));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(sidebar);
+        QVERIFY(editor);
+
+        // Closed: the key puts the panel there and the keyboard in it.
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "toggleSidebar"));
+        QVERIFY(window->property("sidebarOpen").toBool());
+        QVERIFY(sidebar->property("listHasFocus").toBool());
+
+        // Open with the keyboard back in the text — Esc does this, and so does
+        // opening a document. The key takes the panel away rather than
+        // interrupting the writing to reach into it.
+        QVERIFY(QMetaObject::invokeMethod(editor, "forceActiveFocus"));
+        QVERIFY(editor->property("activeFocus").toBool());
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "toggleSidebar"));
+        QVERIFY(!window->property("sidebarOpen").toBool());
+        QCOMPARE(sidebar->property("width").toReal(), 0.0);
+        QVERIFY(editor->property("activeFocus").toBool());
+
+        // And from inside the panel it closes just the same.
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "toggleSidebar"));
+        QVERIFY(sidebar->property("listHasFocus").toBool());
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "toggleSidebar"));
+        QVERIFY(!window->property("sidebarOpen").toBool());
+        QVERIFY(editor->property("activeFocus").toBool());
+    }
+
+    void followsThePointerWhenTheEdgeIsDragged() {
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *sidebar = window->findChild<QObject *>(QStringLiteral("fileSidebar"));
+        QVERIFY(sidebar);
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "setSidebarOpen",
+                                          Q_ARG(QVariant, true)));
+        window->setProperty("width", 1280);
+        QCOMPARE(sidebar->property("width").toReal(), 240.0);
+
+        // The pointer starts on the edge, where the handle is.
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "beginResize", Q_ARG(QVariant, 240.0)));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "resizeTo", Q_ARG(QVariant, 300.0)));
+        QCOMPARE(window->property("sidebarLogicalWidth").toInt(), 300);
+
+        // A pointer that has not moved asks for the width it already has. The
+        // handle rides the edge it moves, so a width measured against it used
+        // to come back different every time it was asked — which is what the
+        // drag twitching was.
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "resizeTo", Q_ARG(QVariant, 300.0)));
+        QCOMPARE(window->property("sidebarLogicalWidth").toInt(), 300);
+
+        // One pixel of pointer, one pixel of panel, both ways.
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "resizeTo", Q_ARG(QVariant, 360.0)));
+        QCOMPARE(window->property("sidebarLogicalWidth").toInt(), 360);
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "resizeTo", Q_ARG(QVariant, 200.0)));
+        QCOMPARE(window->property("sidebarLogicalWidth").toInt(), 200);
+
+        // Widths are kept at text scale 1, and the pointer is not: a drag to a
+        // device pixel lands on the logical width under it, once divided.
+        backend.setTextScale(1.25);
+        QCOMPARE(sidebar->property("width").toReal(), 250.0);
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "beginResize", Q_ARG(QVariant, 250.0)));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "resizeTo", Q_ARG(QVariant, 500.0)));
+        QCOMPARE(window->property("sidebarLogicalWidth").toInt(), 400);
+    }
+
+    void keepsTheWritingColumnWhenDraggedWider() {
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *sidebar = window->findChild<QObject *>(QStringLiteral("fileSidebar"));
+        QVERIFY(sidebar);
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "setSidebarOpen",
+                                          Q_ARG(QVariant, true)));
+        window->setProperty("width", 1280);
+
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "requestLogicalWidth",
+                                          Q_ARG(QVariant, 380)));
+        QCOMPARE(window->property("sidebarLogicalWidth").toInt(), 380);
+
+        // Dragging past either end is held at the limit, and the wide end
+        // always leaves the editor its minimum.
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "requestLogicalWidth",
+                                          Q_ARG(QVariant, 40)));
+        QCOMPARE(window->property("sidebarLogicalWidth").toInt(),
+                 sidebar->property("minimumLogicalWidth").toInt());
+
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "requestLogicalWidth",
+                                          Q_ARG(QVariant, 5000)));
+        QCOMPARE(window->property("sidebarLogicalWidth").toInt(), 1280 - 420);
+
+        // The drag writes the width once it is let go, not on every frame.
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "requestLogicalWidth",
+                                          Q_ARG(QVariant, 300)));
+        QCOMPARE(backend.sidebarWidth(), 240);
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "widthCommitted"));
+        QCOMPARE(backend.sidebarWidth(), 300);
     }
 
 private:

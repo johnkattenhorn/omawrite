@@ -61,11 +61,16 @@ public:
     static int countWords(const QString &text);
     static QString normalizedLinkUrl(const QString &clipboardText);
     static QString suggestedFileName(const QString &text);
+    static QString sanitizedEntryName(const QString &text);
 
     Q_INVOKABLE void attachDocument(QObject *textDocument);
     Q_INVOKABLE void openDialog();
     Q_INVOKABLE void setFolder(const QUrl &url);
     Q_INVOKABLE void openParentFolder();
+    Q_INVOKABLE QUrl createDocument(const QString &name);
+    Q_INVOKABLE QUrl createFolder(const QString &name);
+    Q_INVOKABLE int sidebarWidth() const;
+    Q_INVOKABLE void saveSidebarWidth(int width);
     Q_INVOKABLE void open(const QUrl &url);
     Q_INVOKABLE void save();
     Q_INVOKABLE void saveForClose();

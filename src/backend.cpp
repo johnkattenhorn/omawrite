@@ -36,6 +36,7 @@
 constexpr qreal typoraLineHeightPercent = 140;
 const QString lastSaveDirectorySetting = QStringLiteral("file/lastSaveDirectory");
 const QString browseDirectorySetting = QStringLiteral("file/browseDirectory");
+const QString sidebarWidthSetting = QStringLiteral("window/sidebarWidth");
 
 QString Backend::normalizedLinkUrl(const QString &clipboardText) {
     QString candidate = clipboardText.trimmed();
@@ -219,6 +220,55 @@ void Backend::openParentFolder() {
         return;
 
     applyFolder(directory.absolutePath(), true);
+}
+
+QUrl Backend::createDocument(const QString &name) {
+    const QDir directory(m_folderUrl.toLocalFile());
+    const QString fileName = suggestedFileName(name);
+    const QString path = directory.filePath(fileName);
+    if (QFileInfo::exists(path)) {
+        setStatus(QStringLiteral("%1 already exists.").arg(fileName));
+        return {};
+    }
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        setStatus(QStringLiteral("Could not create %1.").arg(fileName));
+        return {};
+    }
+    file.close();
+
+    setStatus(QStringLiteral("Created %1").arg(fileName));
+    // The folder watcher reports this too, but not before the new row is
+    // wanted on screen.
+    emit folderChanged();
+    return QUrl::fromLocalFile(path);
+}
+
+QUrl Backend::createFolder(const QString &name) {
+    QDir directory(m_folderUrl.toLocalFile());
+    const QString folderName = sanitizedEntryName(name);
+    if (directory.exists(folderName)) {
+        setStatus(QStringLiteral("%1 already exists.").arg(folderName));
+        return {};
+    }
+
+    if (!directory.mkdir(folderName)) {
+        setStatus(QStringLiteral("Could not create %1.").arg(folderName));
+        return {};
+    }
+
+    setStatus(QStringLiteral("Created %1").arg(folderName));
+    emit folderChanged();
+    return QUrl::fromLocalFile(directory.filePath(folderName));
+}
+
+int Backend::sidebarWidth() const {
+    return QSettings().value(sidebarWidthSetting, 240).toInt();
+}
+
+void Backend::saveSidebarWidth(int width) {
+    QSettings().setValue(sidebarWidthSetting, width);
 }
 
 void Backend::open(const QUrl &url) {
@@ -769,13 +819,18 @@ int Backend::countWords(const QString &text) {
     return count;
 }
 
-QString Backend::suggestedFileName(const QString &text) {
+QString Backend::sanitizedEntryName(const QString &text) {
     QString name = text.section(QLatin1Char('\n'), 0, 0).trimmed();
     name.replace(QRegularExpression(QStringLiteral("[/\\x00-\\x1f\\x7f]")),
                  QStringLiteral("-"));
     name = name.left(120).trimmed();
     if (name.isEmpty() || name == QStringLiteral(".") || name == QStringLiteral(".."))
         name = QStringLiteral("Untitled");
+    return name;
+}
+
+QString Backend::suggestedFileName(const QString &text) {
+    QString name = sanitizedEntryName(text);
     if (!name.endsWith(QStringLiteral(".md"), Qt::CaseInsensitive))
         name += QStringLiteral(".md");
     return name;

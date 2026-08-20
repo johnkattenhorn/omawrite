@@ -33,6 +33,7 @@ ApplicationWindow {
     property bool closeConfirmed: false
     property bool searchOpen: false
     property bool sidebarOpen: false
+    property int sidebarLogicalWidth: 240
     property bool searchUpdating: false
     property var searchMatches: []
     property int searchMatchIndex: -1
@@ -53,6 +54,18 @@ ApplicationWindow {
         pendingAction = "close";
         if (!unsavedChangesDialog.opened)
             unsavedChangesDialog.open();
+    }
+
+    function setSidebarOpen(open) {
+        sidebarOpen = open;
+        if (open)
+            fileSidebar.focusList();
+        else
+            editor.forceActiveFocus();
+    }
+
+    function toggleSidebar() {
+        setSidebarOpen(!sidebarOpen);
     }
 
     function requestOpen(url) {
@@ -183,7 +196,7 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+E"
         context: Qt.ApplicationShortcut
-        onActivated: win.sidebarOpen = !win.sidebarOpen
+        onActivated: win.toggleSidebar()
     }
 
     Shortcut {
@@ -339,7 +352,7 @@ ApplicationWindow {
         standardButtons: Dialog.Close
         anchors.centerIn: parent
         contentItem: Label {
-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
+            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
             lineHeight: 1.5
         }
     }
@@ -362,11 +375,30 @@ ApplicationWindow {
         folderHasParent: backend.folderHasParent
         entries: backend.folderEntries
         currentFileUrl: backend.fileUrl
+        logicalWidth: win.sidebarLogicalWidth
+        // Never let the panel squeeze the writing column below its minimum.
+        maximumLogicalWidth: Math.max(minimumLogicalWidth,
+                                      Math.round(win.width / win.textScale) - 420)
 
         onParentFolderRequested: backend.openParentFolder()
         onFolderRequested: function(folderUrl) { backend.setFolder(folderUrl); }
         // requestOpen guards unsaved work with the same dialog Ctrl+O uses.
         onFileRequested: function(fileUrl) { win.requestOpen(fileUrl); }
+        onCreateDocumentRequested: function(name) {
+            var created = backend.createDocument(name);
+            if (created.toString() === "")
+                return;
+            win.requestOpen(created);
+            fileSidebar.selectUrl(created);
+        }
+        onCreateFolderRequested: function(name) {
+            var created = backend.createFolder(name);
+            if (created.toString() !== "")
+                fileSidebar.selectUrl(created);
+        }
+        onWidthChangeRequested: function(width) { win.sidebarLogicalWidth = width; }
+        onWidthCommitted: backend.saveSidebarWidth(win.sidebarLogicalWidth)
+        onDismissed: editor.forceActiveFocus()
     }
 
     Item {
@@ -566,7 +598,11 @@ ApplicationWindow {
             TextEdit {
                 id: editor
                 objectName: "sourceEditor"
-                x: Math.round((editorFlick.width - width) / 2)
+                // Whole pixels keep natively hinted glyphs crisp; pinning the
+                // column to them elsewhere only makes it step when dragged.
+                x: renderType === TextEdit.NativeRendering
+                    ? Math.round((editorFlick.width - width) / 2)
+                    : (editorFlick.width - width) / 2
                 y: Math.max(42, Math.round(win.height * 0.05))
                 width: win.editorWidth
                 height: Math.max(editorFlick.height - y - 96, implicitHeight + 20)
@@ -860,7 +896,7 @@ ApplicationWindow {
                 iconName: "files"
                 iconColor: win.mutedColor
                 tooltip: "Files"
-                onClicked: win.sidebarOpen = !win.sidebarOpen
+                onClicked: win.setSidebarOpen(!win.sidebarOpen)
             }
 
             Label {
@@ -1043,6 +1079,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        sidebarLogicalWidth = backend.sidebarWidth();
         var geometry = backend.windowGeometry();
         if (geometry.x >= 0) x = geometry.x;
         if (geometry.y >= 0) y = geometry.y;

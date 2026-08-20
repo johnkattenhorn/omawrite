@@ -16,8 +16,10 @@ Install via the Omarchy Package Repository via the `omawrite` package. It's inst
 - `Ctrl+Shift+S` saves as.
 - `Ctrl+O` opens a Markdown file through the portal picker.
 - `Ctrl+P` opens the system print dialog.
-- `Ctrl+E` toggles a sidebar listing the Markdown in the current document's
-  folder, so another note is one click away. It starts closed.
+- `Ctrl+E` shows the sidebar listing the Markdown in the current document's
+  folder, and puts the keyboard in it. Pressing it again takes the sidebar away
+  and hands the keyboard back to the text — it never reaches into the panel
+  while you are writing. It starts closed.
 - `Ctrl+N` opens a new Omawrite window.
 - `Ctrl+Z`, `Ctrl+Shift+Z`, and `Ctrl+Y` handle undo and redo.
 - `Super+F` toggles fullscreen. Qt maps this key as `Meta+F`.
@@ -25,6 +27,25 @@ Install via the Omarchy Package Repository via the `omawrite` package. It's inst
 - `Ctrl+H` opens find and replace.
 - `Ctrl+B`, `Ctrl+I`, and `Ctrl+K` insert bold, italic, and link Markdown.
 - `Ctrl+?` shows the keyboard shortcut reference.
+
+## Sidebar
+
+The sidebar lists the folder the open document lives in — Markdown files and
+the folders beside them, nothing else. Clicking a document opens it, guarded by
+the same unsaved-changes prompt as `Ctrl+O`.
+
+With the keyboard, once `Ctrl+E` has put focus there:
+
+- `Up`/`Down` or `j`/`k` move through the folder.
+- `Enter`, `Right`, or `l` opens a document, or walks into a folder.
+- `Backspace`, `Left`, or `h` goes up a level.
+- `a` starts a new Markdown file and `A` a new folder; type the name and press
+  `Enter`, or `Esc` to abandon it. A new document opens straight away, and an
+  existing name is reported rather than overwritten.
+- `Esc` returns to writing, leaving the sidebar open.
+
+Drag its right edge to widen it; the width is remembered, and stops short of
+squeezing the writing column below its usual measure.
 
 Unsaved drafts are recovered after an abnormal exit. Omawrite also watches open files
 and warns before an external change can replace local work.
