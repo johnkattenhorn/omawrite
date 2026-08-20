@@ -291,6 +291,33 @@ private slots:
         QCOMPARE(nowDimmed, dimmedColor);
     }
 
+    void focusModeKeepsInlineMarkersHidden() {
+        QTextDocument doc;
+        doc.setPlainText(QStringLiteral("active line\n\nsome **bold** here"));
+        MarkdownHighlighter highlighter(&doc);
+        highlighter.setColors(QStringLiteral("#101010"), QStringLiteral("#eeeeee"),
+                              QStringLiteral("#5584aa"));
+
+        highlighter.setFocusCursorPosition(0);
+        highlighter.setFocusMode(true);
+
+        const QTextBlock dimmed = doc.findBlockByNumber(2);
+        QVERIFY(!dimmed.layout()->formats().isEmpty());
+        QColor markerColor;
+        QColor textColor;
+        for (const QTextLayout::FormatRange &range : dimmed.layout()->formats()) {
+            const QString run = dimmed.text().mid(range.start, range.length);
+            if (run == QStringLiteral("**"))
+                markerColor = range.format.foreground().color();
+            else if (run == QStringLiteral("bold"))
+                textColor = range.format.foreground().color();
+        }
+
+        QCOMPARE(markerColor, QColor(QStringLiteral("#101010")));
+        QVERIFY(textColor.isValid());
+        QVERIFY(textColor != markerColor);
+    }
+
 private:
     QTemporaryDir m_settingsDirectory;
 };

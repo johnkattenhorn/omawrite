@@ -286,14 +286,19 @@ void MarkdownHighlighter::applyFocusDimming(const QString &text) {
     if (m_focusCursorPosition >= blockStart
         && m_focusCursorPosition < blockStart + currentBlock().length())
         return;
+    const QColor hidden = m_hiddenMarkerFormat.foreground().color();
     int pos = 0;
     while (pos < text.length()) {
         QTextCharFormat fmt = format(pos);
         int run = 1;
         while (pos + run < text.length() && format(pos + run) == fmt)
             ++run;
-        fmt.setForeground(m_dimmedColor);
-        setFormat(pos, run, fmt);
+        // Inline markers are hidden by painting them in the background colour,
+        // so dimming them would make them reappear.
+        if (fmt.foreground().color() != hidden) {
+            fmt.setForeground(m_dimmedColor);
+            setFormat(pos, run, fmt);
+        }
         pos += run;
     }
 }
