@@ -583,7 +583,10 @@ ApplicationWindow {
                     color: win.strongTextColor
                 }
                 onCursorRectangleChanged: editorFlick.ensureCursorVisible()
-                onYChanged: editorFlick.ensureCursorVisible()
+                // Entering focus mode moves the editor to the middle of the
+                // viewport; y also tracks the window height outside it, where
+                // recentring would drag a reader back to the caret.
+                onYChanged: if (backend.focusMode) editorFlick.ensureCursorVisible()
                 onCursorPositionChanged: {
                     if (backend.focusMode)
                         backend.updateCursorPosition(cursorPosition);

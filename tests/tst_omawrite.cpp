@@ -336,6 +336,64 @@ private slots:
         QVERIFY(textColor != markerColor);
     }
 
+    void recentresOnlyWhenFocusModeMovesTheEditor() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+        QObject *viewport = editor->parent();
+        while (viewport && !viewport->property("contentY").isValid())
+            viewport = viewport->parent();
+        QVERIFY(viewport);
+
+        QString text;
+        for (int line = 0; line < 300; ++line)
+            text += QStringLiteral("line %1 of the document\n").arg(line);
+        editor->setProperty("text", text);
+        const int caretPosition = text.indexOf(QStringLiteral("line 150 "));
+        QVERIFY(caretPosition > 0);
+        editor->setProperty("cursorPosition", caretPosition);
+        QTest::qWait(50);
+
+        // Reading elsewhere, with the caret scrolled out of sight: resizing
+        // the window has to leave the page where the reader put it.
+        const qreal readingAt = editor->property("y").toReal()
+            + editor->property("cursorRectangle").toRectF().y()
+            + viewport->property("height").toReal() + 200;
+        viewport->setProperty("contentY", readingAt);
+        QCOMPARE(viewport->property("contentY").toReal(), readingAt);
+        window->setProperty("height", 900);
+        QTest::qWait(50);
+        const qreal stillReadingAt = viewport->property("contentY").toReal();
+        QVERIFY2(qAbs(stillReadingAt - readingAt) <= 2,
+                 qPrintable(QStringLiteral("the page moved from %1 to %2")
+                                .arg(readingAt)
+                                .arg(stillReadingAt)));
+
+        // Entering focus mode does have to move it: the caret line goes to
+        // the middle of the viewport straight away, not at the next keystroke.
+        backend.updateCursorPosition(caretPosition);
+        backend.toggleFocusMode();
+        QTest::qWait(50);
+        const QRectF caret = editor->property("cursorRectangle").toRectF();
+        const qreal viewportHeight = viewport->property("height").toReal();
+        const qreal caretCentre = editor->property("y").toReal() + caret.y()
+            + caret.height() / 2 - viewport->property("contentY").toReal();
+        QVERIFY2(qAbs(caretCentre - viewportHeight / 2) <= 2,
+                 qPrintable(QStringLiteral("caret centre %1 in a viewport of %2")
+                                .arg(caretCentre)
+                                .arg(viewportHeight)));
+    }
+
 private:
     QTemporaryDir m_settingsDirectory;
 };
