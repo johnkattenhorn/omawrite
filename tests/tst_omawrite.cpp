@@ -112,6 +112,77 @@ private slots:
         QTRY_COMPARE(externalChangeSpy.count(), 1);
     }
 
+    void listsOnlyDocumentsAndFolders() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        QVERIFY(QDir(folder.path()).mkdir(QStringLiteral("archive")));
+        for (const QString &name : {QStringLiteral("second.md"),
+                                    QStringLiteral("first.markdown"),
+                                    QStringLiteral("notes.txt"),
+                                    QStringLiteral(".hidden.md")}) {
+            QFile file(folder.filePath(name));
+            QVERIFY(file.open(QIODevice::WriteOnly));
+        }
+
+        Backend backend;
+        backend.setFolder(QUrl::fromLocalFile(folder.path()));
+        QCOMPARE(backend.folderName(), QDir(folder.path()).dirName());
+        QVERIFY(backend.folderHasParent());
+
+        // Folders first, then the documents Omawrite can open, by name.
+        // Plain text and dotfiles are not writing in this app's sense.
+        const QVariantList entries = backend.folderEntries();
+        QCOMPARE(entries.size(), 3);
+        QCOMPARE(entries.at(0).toMap().value(QStringLiteral("name")).toString(),
+                 QStringLiteral("archive"));
+        QVERIFY(entries.at(0).toMap().value(QStringLiteral("isDir")).toBool());
+        QCOMPARE(entries.at(1).toMap().value(QStringLiteral("name")).toString(),
+                 QStringLiteral("first.markdown"));
+        QVERIFY(!entries.at(1).toMap().value(QStringLiteral("isDir")).toBool());
+        QCOMPARE(entries.at(2).toMap().value(QStringLiteral("name")).toString(),
+                 QStringLiteral("second.md"));
+        QCOMPARE(entries.at(2).toMap().value(QStringLiteral("url")).toUrl(),
+                 QUrl::fromLocalFile(folder.filePath(QStringLiteral("second.md"))));
+
+        // An empty folder still lists, so it can be walked out of again.
+        backend.setFolder(entries.at(0).toMap().value(QStringLiteral("url")).toUrl());
+        QVERIFY(backend.folderEntries().isEmpty());
+        backend.openParentFolder();
+        QCOMPARE(backend.folderUrl(), QUrl::fromLocalFile(folder.path()));
+    }
+
+    void browsesTheOpenDocumentsFolder() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("draft.md"));
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.close();
+
+        Backend backend;
+        QSignalSpy folderSpy(&backend, &Backend::folderChanged);
+        backend.open(QUrl::fromLocalFile(path));
+        QCOMPARE(backend.folderUrl(), QUrl::fromLocalFile(folder.path()));
+        QCOMPARE(folderSpy.count(), 1);
+    }
+
+    void noticesDocumentsWrittenElsewhere() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+
+        Backend backend;
+        backend.setFolder(QUrl::fromLocalFile(folder.path()));
+        QVERIFY(backend.folderEntries().isEmpty());
+
+        QSignalSpy folderSpy(&backend, &Backend::folderChanged);
+        QFile file(folder.filePath(QStringLiteral("written-elsewhere.md")));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.close();
+
+        QTRY_VERIFY(folderSpy.count() > 0);
+        QCOMPARE(backend.folderEntries().size(), 1);
+    }
+
     void keepsCursorAndSelectionStableAcrossInsertions() {
         const QString mutationsPath = QFINDTESTDATA("../src/EditorMutations.js");
         QVERIFY(!mutationsPath.isEmpty());
@@ -244,6 +315,35 @@ private slots:
         fallbackDocument.saveAsDialog();
         const QUrl fallbackUrl = fallbackDialogSpy.takeFirst().constFirst().toUrl();
         QCOMPARE(QFileInfo(fallbackUrl.toLocalFile()).absolutePath(), QDir::homePath());
+    }
+
+    void togglesTheFileSidebar() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *sidebar = window->findChild<QObject *>(QStringLiteral("fileSidebar"));
+        QObject *filesButton = window->findChild<QObject *>(QStringLiteral("filesButton"));
+        QVERIFY(sidebar);
+        QVERIFY(filesButton);
+
+        // Closed on launch: the panel takes no width from the writing area.
+        QVERIFY(!window->property("sidebarOpen").toBool());
+        QCOMPARE(sidebar->property("width").toReal(), 0.0);
+
+        QVERIFY(QMetaObject::invokeMethod(filesButton, "clicked"));
+        QVERIFY(window->property("sidebarOpen").toBool());
+        QVERIFY(sidebar->property("width").toReal() > 0.0);
+
+        QVERIFY(QMetaObject::invokeMethod(filesButton, "clicked"));
+        QCOMPARE(sidebar->property("width").toReal(), 0.0);
     }
 
 private:

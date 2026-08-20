@@ -35,6 +35,7 @@
 
 constexpr qreal typoraLineHeightPercent = 140;
 const QString lastSaveDirectorySetting = QStringLiteral("file/lastSaveDirectory");
+const QString browseDirectorySetting = QStringLiteral("file/browseDirectory");
 
 QString Backend::normalizedLinkUrl(const QString &clipboardText) {
     QString candidate = clipboardText.trimmed();
@@ -117,6 +118,13 @@ Backend::Backend(QObject *parent) : QObject(parent) {
                 emit externalChangeDetected(deleted, m_modified);
             });
 
+    connect(&m_folderWatcher, &QFileSystemWatcher::directoryChanged, this,
+            [this]() { emit folderChanged(); });
+    const QString remembered = QSettings().value(browseDirectorySetting).toString();
+    applyFolder(QDir(remembered).exists() ? remembered
+                                          : defaultDirectory().absolutePath(),
+                false);
+
     loadOmarchyTheme();
     watchOmarchyTheme();
     connect(&m_themeWatcher, &QFileSystemWatcher::fileChanged, this, [this]() {
@@ -196,6 +204,21 @@ void Backend::attachDocument(QObject *textDocument) {
 
 void Backend::openDialog() {
     emit openDialogRequested();
+}
+
+void Backend::setFolder(const QUrl &url) {
+    if (!url.isLocalFile())
+        return;
+
+    applyFolder(url.toLocalFile(), true);
+}
+
+void Backend::openParentFolder() {
+    QDir directory(m_folderUrl.toLocalFile());
+    if (!directory.cdUp())
+        return;
+
+    applyFolder(directory.absolutePath(), true);
 }
 
 void Backend::open(const QUrl &url) {
@@ -445,6 +468,8 @@ void Backend::setFileUrl(const QUrl &url) {
     m_fileUrl = url;
     emit fileUrlChanged();
     watchCurrentFile();
+    if (m_fileUrl.isLocalFile())
+        applyFolder(QFileInfo(m_fileUrl.toLocalFile()).absolutePath(), true);
 }
 
 void Backend::setModified(bool modified) {
@@ -573,6 +598,57 @@ void Backend::watchCurrentFile() {
         m_fileWatcher.addPath(m_fileUrl.toLocalFile());
 }
 
+void Backend::applyFolder(const QString &path, bool remember) {
+    const QDir directory = QDir(path).exists() ? QDir(path) : defaultDirectory();
+    const QUrl folderUrl = QUrl::fromLocalFile(directory.absolutePath());
+    if (m_folderUrl == folderUrl)
+        return;
+
+    m_folderUrl = folderUrl;
+    watchCurrentFolder();
+    if (remember)
+        QSettings().setValue(browseDirectorySetting, directory.absolutePath());
+    emit folderChanged();
+}
+
+void Backend::watchCurrentFolder() {
+    const QStringList watched = m_folderWatcher.directories();
+    if (!watched.isEmpty())
+        m_folderWatcher.removePaths(watched);
+    if (m_folderUrl.isLocalFile())
+        m_folderWatcher.addPath(m_folderUrl.toLocalFile());
+}
+
+QString Backend::folderName() const {
+    const QDir directory(m_folderUrl.toLocalFile());
+    // The root directory has no name of its own; show its path instead.
+    return directory.isRoot() ? directory.absolutePath() : directory.dirName();
+}
+
+bool Backend::folderHasParent() const {
+    return !QDir(m_folderUrl.toLocalFile()).isRoot();
+}
+
+QVariantList Backend::folderEntries() const {
+    static const QStringList markdownFilter{QStringLiteral("*.md"),
+                                            QStringLiteral("*.markdown")};
+    // AllDirs exempts folders from the name filter so an empty one can still
+    // be walked into, while files stay narrowed to what Omawrite can open:
+    // this is a view of a writing folder, not a file manager.
+    QVariantList entries;
+    const QFileInfoList infos = QDir(m_folderUrl.toLocalFile())
+        .entryInfoList(markdownFilter, QDir::AllDirs | QDir::Files | QDir::NoDotAndDotDot,
+                       QDir::DirsFirst | QDir::Name | QDir::IgnoreCase);
+    entries.reserve(infos.size());
+    for (const QFileInfo &info : infos) {
+        entries.append(QVariantMap{
+            {QStringLiteral("name"), info.fileName()},
+            {QStringLiteral("url"), QUrl::fromLocalFile(info.absoluteFilePath())},
+            {QStringLiteral("isDir"), info.isDir()}});
+    }
+    return entries;
+}
+
 void Backend::loadOmarchyTheme() {
     m_themeBackground = m_darkMode ? QStringLiteral("#101010") : QStringLiteral("#ffffff");
     m_themeForeground = m_darkMode ? QStringLiteral("#eeeeee") : QStringLiteral("#222324");
@@ -666,12 +742,15 @@ QUrl Backend::suggestedSaveUrl() const {
     if (m_fileUrl.isLocalFile())
         return m_fileUrl;
 
+    return QUrl::fromLocalFile(
+        defaultDirectory().filePath(suggestedFileName(currentDocumentText())));
+}
+
+QDir Backend::defaultDirectory() const {
     const QString savedDirectory = QSettings().value(lastSaveDirectorySetting).toString();
-    const QDir directory = savedDirectory.isEmpty() || !QDir(savedDirectory).exists()
+    return savedDirectory.isEmpty() || !QDir(savedDirectory).exists()
         ? QDir::home()
         : QDir(savedDirectory);
-    return QUrl::fromLocalFile(
-        directory.filePath(suggestedFileName(currentDocumentText())));
 }
 
 QString Backend::currentDocumentText() const {

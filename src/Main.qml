@@ -28,9 +28,11 @@ ApplicationWindow {
     readonly property int editorFontPixelSize: scaledSize(20)
     readonly property int editorWidth: Math.min(
         Math.round(writerFontMetrics.averageCharacterWidth * 65),
-        Math.max(360, width - Math.round(writerFontMetrics.averageCharacterWidth * 20)))
+        Math.max(360, width - fileSidebar.width
+                 - Math.round(writerFontMetrics.averageCharacterWidth * 20)))
     property bool closeConfirmed: false
     property bool searchOpen: false
+    property bool sidebarOpen: false
     property bool searchUpdating: false
     property var searchMatches: []
     property int searchMatchIndex: -1
@@ -176,6 +178,12 @@ ApplicationWindow {
         sequence: "Ctrl+?"
         context: Qt.ApplicationShortcut
         onActivated: shortcutsDialog.open()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+E"
+        context: Qt.ApplicationShortcut
+        onActivated: win.sidebarOpen = !win.sidebarOpen
     }
 
     Shortcut {
@@ -331,13 +339,39 @@ ApplicationWindow {
         standardButtons: Dialog.Close
         anchors.centerIn: parent
         contentItem: Label {
-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
+            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
             lineHeight: 1.5
         }
     }
 
+    FileSidebar {
+        id: fileSidebar
+        objectName: "fileSidebar"
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        expanded: win.sidebarOpen
+        darkMode: win.darkMode
+        textScale: win.textScale
+        pageColor: win.pageColor
+        textColor: win.textColor
+        mutedColor: win.mutedColor
+        accentColor: backend.themeAccent
+        selectionFill: win.selectionFill
+        folderName: backend.folderName
+        folderHasParent: backend.folderHasParent
+        entries: backend.folderEntries
+        currentFileUrl: backend.fileUrl
+
+        onParentFolderRequested: backend.openParentFolder()
+        onFolderRequested: function(folderUrl) { backend.setFolder(folderUrl); }
+        // requestOpen guards unsaved work with the same dialog Ctrl+O uses.
+        onFileRequested: function(fileUrl) { win.requestOpen(fileUrl); }
+    }
+
     Item {
         anchors.fill: parent
+        anchors.leftMargin: fileSidebar.width
 
         Flickable {
             id: editorFlick
@@ -819,6 +853,14 @@ ApplicationWindow {
                 iconColor: win.mutedColor
                 tooltip: "Open"
                 onClicked: backend.openDialog()
+            }
+
+            FooterIconButton {
+                objectName: "filesButton"
+                iconName: "files"
+                iconColor: win.mutedColor
+                tooltip: "Files"
+                onClicked: win.sidebarOpen = !win.sidebarOpen
             }
 
             Label {
