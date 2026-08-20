@@ -347,6 +347,7 @@ private slots:
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
         QVERIFY2(window, qPrintable(component.errorString()));
+        window->setProperty("visible", false);
 
         QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
         QVERIFY(editor);
@@ -356,7 +357,7 @@ private slots:
         QVERIFY(viewport);
 
         QString text;
-        for (int line = 0; line < 300; ++line)
+        for (int line = 0; line < 600; ++line)
             text += QStringLiteral("line %1 of the document\n").arg(line);
         editor->setProperty("text", text);
         const int caretPosition = text.indexOf(QStringLiteral("line 150 "));
