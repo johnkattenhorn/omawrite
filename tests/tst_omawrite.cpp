@@ -249,46 +249,64 @@ private slots:
     }
 
     void togglesFocusMode() {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString path = directory.filePath(QStringLiteral("focus-test.md"));
+
         Backend backend;
         QSignalSpy focusSpy(&backend, &Backend::focusModeChanged);
         QVERIFY(!backend.focusMode());
 
+        backend.saveAs(QUrl::fromLocalFile(path));
+        QCOMPARE(backend.status(), QStringLiteral("Saved focus-test.md"));
+
         backend.toggleFocusMode();
         QVERIFY(backend.focusMode());
         QCOMPARE(focusSpy.count(), 1);
+        QCOMPARE(backend.status(), QStringLiteral("Saved focus-test.md"));
 
         backend.toggleFocusMode();
         QVERIFY(!backend.focusMode());
         QCOMPARE(focusSpy.count(), 2);
+        QCOMPARE(backend.status(), QStringLiteral("Saved focus-test.md"));
     }
 
     void focusModeDimsInactiveBlocks() {
         QTextDocument doc;
         doc.setPlainText(QStringLiteral("First paragraph\n\nSecond paragraph"));
         MarkdownHighlighter highlighter(&doc);
+        highlighter.setColors(QStringLiteral("#101010"), QStringLiteral("#eeeeee"),
+                              QStringLiteral("#5584aa"));
 
         // Enable focus mode with cursor in the first block
         highlighter.setFocusCursorPosition(0);
         highlighter.setFocusMode(true);
 
-        // First block (active) should keep its original foreground
+        // First block (active) should keep its original undimmed foreground
         QTextBlock firstBlock = doc.findBlockByNumber(0);
-        QTextCharFormat firstFormat = firstBlock.layout()->formats().isEmpty()
-            ? QTextCharFormat()
-            : firstBlock.layout()->formats().first().format;
+        bool firstIsDimmed = !firstBlock.layout()->formats().isEmpty()
+            && firstBlock.layout()->formats().first().format.foreground().color() != QColor(QStringLiteral("#eeeeee"));
+        QVERIFY(!firstIsDimmed);
 
         // Third block (inactive, "Second paragraph") should be dimmed
         QTextBlock thirdBlock = doc.findBlockByNumber(2);
         QVERIFY(!thirdBlock.layout()->formats().isEmpty());
         QColor dimmedColor = thirdBlock.layout()->formats().first().format.foreground().color();
         QVERIFY(dimmedColor.isValid());
+        QVERIFY(dimmedColor != QColor(QStringLiteral("#eeeeee")));
+        QVERIFY(dimmedColor != QColor(QStringLiteral("#101010")));
 
-        // Move cursor to third block — it should un-dim, first should dim
+        // Move cursor to third block — first should dim, third should un-dim
         highlighter.setFocusCursorPosition(thirdBlock.position());
         QTextBlock updatedFirst = doc.findBlockByNumber(0);
         QVERIFY(!updatedFirst.layout()->formats().isEmpty());
         QColor nowDimmed = updatedFirst.layout()->formats().first().format.foreground().color();
         QCOMPARE(nowDimmed, dimmedColor);
+
+        QTextBlock updatedThird = doc.findBlockByNumber(2);
+        bool thirdIsDimmed = !updatedThird.layout()->formats().isEmpty()
+            && updatedThird.layout()->formats().first().format.foreground().color() == dimmedColor;
+        QVERIFY(!thirdIsDimmed);
     }
 
     void focusModeKeepsInlineMarkersHidden() {

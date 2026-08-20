@@ -426,7 +426,6 @@ void Backend::toggleFocusMode() {
     m_focusMode = !m_focusMode;
     if (m_highlighter)
         m_highlighter->setFocusMode(m_focusMode);
-    setStatus(m_focusMode ? QStringLiteral("Focus mode") : QStringLiteral(""));
     emit focusModeChanged();
 }
 

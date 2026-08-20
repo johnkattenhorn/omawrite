@@ -274,6 +274,10 @@ ApplicationWindow {
             externalChangeDialog.locallyModified = locallyModified;
             externalChangeDialog.open();
         }
+
+        function onFocusModeChanged() {
+            Qt.callLater(editorFlick.ensureCursorVisible);
+        }
     }
 
     Dialogs.FileDialog {
@@ -338,7 +342,7 @@ ApplicationWindow {
         modal: true
         title: "Keyboard shortcuts"
         standardButtons: Dialog.Close
-        width: Math.min(380, win.width - 48)
+        width: Math.min(win.scaledSize(380), win.width - 48)
         x: Math.round((win.width - width) / 2)
         y: Math.round((win.height - height) / 2)
         contentItem: Label {
@@ -579,6 +583,7 @@ ApplicationWindow {
                     color: win.strongTextColor
                 }
                 onCursorRectangleChanged: editorFlick.ensureCursorVisible()
+                onYChanged: editorFlick.ensureCursorVisible()
                 onCursorPositionChanged: {
                     if (backend.focusMode)
                         backend.updateCursorPosition(cursorPosition);
