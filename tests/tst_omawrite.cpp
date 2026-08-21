@@ -377,6 +377,123 @@ private slots:
     }
 
 
+    void closesTheSidebarRatherThanReachingIntoIt() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        for (const QString &name : {QStringLiteral("one.md"), QStringLiteral("two.md")}) {
+            QFile file(folder.filePath(name));
+            QVERIFY(file.open(QIODevice::WriteOnly));
+        }
+
+        Backend backend;
+        backend.setFolder(QUrl::fromLocalFile(folder.path()));
+
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *sidebar = window->findChild<QObject *>(QStringLiteral("fileSidebar"));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(sidebar);
+        QVERIFY(editor);
+
+        // Closed: the key puts the panel there and the keyboard in it.
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "toggleSidebar"));
+        QVERIFY(window->property("sidebarOpen").toBool());
+        QVERIFY(sidebar->property("listHasFocus").toBool());
+
+        // Open with the keyboard back in the text — Esc does this, and so does
+        // opening a document. The key takes the panel away rather than
+        // interrupting the writing to reach into it.
+        QVERIFY(QMetaObject::invokeMethod(editor, "forceActiveFocus"));
+        QVERIFY(editor->property("activeFocus").toBool());
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "toggleSidebar"));
+        QVERIFY(!window->property("sidebarOpen").toBool());
+        QCOMPARE(sidebar->property("width").toReal(), 0.0);
+        QVERIFY(editor->property("activeFocus").toBool());
+
+        // And from inside the panel it closes just the same.
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "toggleSidebar"));
+        QVERIFY(sidebar->property("listHasFocus").toBool());
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "toggleSidebar"));
+        QVERIFY(!window->property("sidebarOpen").toBool());
+        QVERIFY(editor->property("activeFocus").toBool());
+    }
+
+    void putsTheCaretAtTheEndOfAnOpenedDocument() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("long.md"));
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("# Title\n\n");
+        // Long enough that the end of it is well off the bottom of the window.
+        for (int i = 0; i < 200; ++i)
+            file.write(QStringLiteral("body line %1\n").arg(i).toUtf8());
+        file.close();
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QObject *flick = window->findChild<QObject *>(QStringLiteral("editorFlick"));
+        QVERIFY(editor);
+        QVERIFY(flick);
+
+        // Writing carries on where the writing stopped, so an opened
+        // document hands over its end rather than its beginning.
+        backend.open(QUrl::fromLocalFile(path));
+        QCOMPARE(editor->property("cursorPosition").toInt(),
+                 editor->property("length").toInt());
+
+        // And it is drawn there. The document is laid out in stages — the
+        // text, then the hidden markers shrinking, then the line height —
+        // so a caret measured too early sits against a layout that is no
+        // longer on screen, halfway up the page.
+        const QRectF caret = editor->property("cursorRectangle").toRectF();
+        const qreal textHeight = editor->property("implicitHeight").toReal();
+        qDebug() << "PROBE caret" << caret << "textHeight" << textHeight
+                 << "contentY" << flick->property("contentY")
+                 << "contentHeight" << flick->property("contentHeight");
+        QVERIFY(textHeight > 0);
+        QVERIFY2(caret.y() > textHeight * 0.9,
+                 qPrintable(QStringLiteral("caret at %1 of %2")
+                            .arg(caret.y()).arg(textHeight)));
+        QVERIFY(flick->property("contentY").toReal() > 0);
+
+        // And again switching between documents, which is how it is really
+        // met: the layout in place is the previous document's.
+        const QString second = folder.filePath(QStringLiteral("second.md"));
+        QFile secondFile(second);
+        QVERIFY(secondFile.open(QIODevice::WriteOnly));
+        for (int i = 0; i < 60; ++i)
+            secondFile.write(QStringLiteral("## Heading %1\n\nwith **bold** and `code` in it\n\n").arg(i).toUtf8());
+        secondFile.close();
+        backend.open(QUrl::fromLocalFile(second));
+        const QRectF caret2 = editor->property("cursorRectangle").toRectF();
+        const qreal textHeight2 = editor->property("implicitHeight").toReal();
+        qDebug() << "PROBE2 caret" << caret2 << "textHeight" << textHeight2
+                 << "contentY" << flick->property("contentY")
+                 << "contentHeight" << flick->property("contentHeight");
+        QVERIFY2(caret2.y() > textHeight2 * 0.9,
+                 qPrintable(QStringLiteral("caret at %1 of %2")
+                            .arg(caret2.y()).arg(textHeight2)));
+
+        // Saving names the file but does not reload it, so writing is never
+        // interrupted by the caret jumping back to the top.
+        editor->setProperty("cursorPosition", 12);
+        backend.saveAs(QUrl::fromLocalFile(folder.filePath(QStringLiteral("copy.md"))));
+        QCOMPARE(editor->property("cursorPosition").toInt(), 12);
+    }
+
     void walksTheSidebarWithTheKeyboard() {
         QTemporaryDir folder;
         QVERIFY(folder.isValid());
@@ -417,6 +534,134 @@ private slots:
                  QUrl::fromLocalFile(folder.filePath(QStringLiteral("archive"))));
         QVERIFY(QMetaObject::invokeMethod(sidebar, "goUp"));
         QCOMPARE(backend.folderUrl(), QUrl::fromLocalFile(folder.path()));
+    }
+
+    void handsTheKeyboardBackWhenADocumentOpens() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        QVERIFY(QDir(folder.path()).mkdir(QStringLiteral("archive")));
+        for (const QString &name : {QStringLiteral("one.md"), QStringLiteral("two.md")}) {
+            QFile file(folder.filePath(name));
+            QVERIFY(file.open(QIODevice::WriteOnly));
+        }
+
+        Backend backend;
+        backend.setFolder(QUrl::fromLocalFile(folder.path()));
+
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *sidebar = window->findChild<QObject *>(QStringLiteral("fileSidebar"));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(sidebar);
+        QVERIFY(editor);
+
+        // Browsing takes the keyboard, and the caret goes out with it.
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "setSidebarOpen",
+                                          Q_ARG(QVariant, true)));
+        QVERIFY(sidebar->property("listHasFocus").toBool());
+        QVERIFY(!editor->property("activeFocus").toBool());
+
+        // Opening a document hands it straight back, so it can be written in
+        // without closing the sidebar first.
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "selectNext"));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "activateSelection"));
+        QCOMPARE(backend.fileName(), QStringLiteral("one.md"));
+        QVERIFY(editor->property("activeFocus").toBool());
+        QVERIFY(window->property("sidebarOpen").toBool());
+
+        // Walking into a folder is not opening a document, so it keeps it.
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "setSidebarOpen",
+                                          Q_ARG(QVariant, true)));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "selectPrevious"));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "activateSelection"));
+        QCOMPARE(backend.folderName(), QStringLiteral("archive"));
+        QVERIFY(sidebar->property("listHasFocus").toBool());
+        QVERIFY(!editor->property("activeFocus").toBool());
+
+        // Coming back up, the panel starts from the document being written.
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "goUp"));
+        QTRY_COMPARE(sidebar->property("selectedName").toString(),
+                     QStringLiteral("one.md"));
+
+        // Unsaved work gets its prompt, and the keyboard still ends up in the
+        // document that opens once the prompt is out of the way.
+        editor->setProperty("text", QStringLiteral("a draft"));
+        QVERIFY(backend.modified());
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "selectNext"));
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "activateSelection"));
+        QCOMPARE(window->property("pendingAction").toString(), QStringLiteral("open"));
+        QVERIFY(!editor->property("activeFocus").toBool());
+
+        QObject *dialog = window->findChild<QObject *>(
+            QStringLiteral("unsavedChangesDialog"));
+        QVERIFY(dialog);
+        QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
+        QVERIFY(QMetaObject::invokeMethod(dialog, "discardRequested"));
+        QCOMPARE(backend.fileName(), QStringLiteral("two.md"));
+        // A handoff made while the dialog is still closing is undone.
+        QTRY_VERIFY(!dialog->property("visible").toBool());
+        QVERIFY(editor->property("activeFocus").toBool());
+
+        // A document that cannot be read is never opened, so the keyboard
+        // stays with the browsing rather than following a document that
+        // never arrived.
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "setSidebarOpen",
+                                          Q_ARG(QVariant, true)));
+        const QUrl missing = QUrl::fromLocalFile(
+            folder.filePath(QStringLiteral("missing.md")));
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "requestOpen",
+                                          Q_ARG(QVariant, QVariant(missing))));
+        QCOMPARE(backend.fileName(), QStringLiteral("two.md"));
+        QVERIFY(sidebar->property("listHasFocus").toBool());
+        QVERIFY(!editor->property("activeFocus").toBool());
+    }
+
+    void keepsTheSidebarSelectionWhenTheFolderIsReRead() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        for (const QString &name : {QStringLiteral("one.md"), QStringLiteral("two.md")}) {
+            QFile file(folder.filePath(name));
+            QVERIFY(file.open(QIODevice::WriteOnly));
+        }
+
+        Backend backend;
+        backend.setFolder(QUrl::fromLocalFile(folder.path()));
+
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *sidebar = window->findChild<QObject *>(QStringLiteral("fileSidebar"));
+        QVERIFY(sidebar);
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "setSidebarOpen",
+                                          Q_ARG(QVariant, true)));
+
+        QVERIFY(QMetaObject::invokeMethod(sidebar, "selectNext"));
+        QCOMPARE(sidebar->property("selectedName").toString(), QStringLiteral("two.md"));
+
+        // The folder is re-read whenever anything in it changes — a save is
+        // enough — and the rows can move; the keyboard should stay on the
+        // row it was on rather than be thrown back to the top.
+        QVERIFY(QMetaObject::invokeMethod(&backend, "createFolder",
+                                          Q_ARG(QString, QStringLiteral("archive"))));
+        QTRY_COMPARE(sidebar->property("selectedName").toString(),
+                     QStringLiteral("two.md"));
+
+        // Reopening the panel starts from the open document instead.
+        backend.open(QUrl::fromLocalFile(folder.filePath(QStringLiteral("one.md"))));
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "setSidebarOpen",
+                                          Q_ARG(QVariant, false)));
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "setSidebarOpen",
+                                          Q_ARG(QVariant, true)));
+        QCOMPARE(sidebar->property("selectedName").toString(), QStringLiteral("one.md"));
     }
 
     void createsAndOpensADocumentFromTheSidebar() {
@@ -464,52 +709,6 @@ private slots:
         nameField->setProperty("text", QStringLiteral("discarded"));
         QVERIFY(QMetaObject::invokeMethod(sidebar, "cancelNewEntry"));
         QVERIFY(!QFileInfo::exists(folder.filePath(QStringLiteral("discarded.md"))));
-    }
-
-    void closesTheSidebarRatherThanReachingIntoIt() {
-        QTemporaryDir folder;
-        QVERIFY(folder.isValid());
-        for (const QString &name : {QStringLiteral("one.md"), QStringLiteral("two.md")}) {
-            QFile file(folder.filePath(name));
-            QVERIFY(file.open(QIODevice::WriteOnly));
-        }
-
-        Backend backend;
-        backend.setFolder(QUrl::fromLocalFile(folder.path()));
-
-        QQmlEngine engine;
-        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
-        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
-        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
-        QScopedPointer<QObject> window(component.create());
-        QVERIFY2(window, qPrintable(component.errorString()));
-
-        QObject *sidebar = window->findChild<QObject *>(QStringLiteral("fileSidebar"));
-        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
-        QVERIFY(sidebar);
-        QVERIFY(editor);
-
-        // Closed: the key puts the panel there and the keyboard in it.
-        QVERIFY(QMetaObject::invokeMethod(window.data(), "toggleSidebar"));
-        QVERIFY(window->property("sidebarOpen").toBool());
-        QVERIFY(sidebar->property("listHasFocus").toBool());
-
-        // Open with the keyboard back in the text — Esc does this, and so does
-        // opening a document. The key takes the panel away rather than
-        // interrupting the writing to reach into it.
-        QVERIFY(QMetaObject::invokeMethod(editor, "forceActiveFocus"));
-        QVERIFY(editor->property("activeFocus").toBool());
-        QVERIFY(QMetaObject::invokeMethod(window.data(), "toggleSidebar"));
-        QVERIFY(!window->property("sidebarOpen").toBool());
-        QCOMPARE(sidebar->property("width").toReal(), 0.0);
-        QVERIFY(editor->property("activeFocus").toBool());
-
-        // And from inside the panel it closes just the same.
-        QVERIFY(QMetaObject::invokeMethod(window.data(), "toggleSidebar"));
-        QVERIFY(sidebar->property("listHasFocus").toBool());
-        QVERIFY(QMetaObject::invokeMethod(window.data(), "toggleSidebar"));
-        QVERIFY(!window->property("sidebarOpen").toBool());
-        QVERIFY(editor->property("activeFocus").toBool());
     }
 
     void followsThePointerWhenTheEdgeIsDragged() {

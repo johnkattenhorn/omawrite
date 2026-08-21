@@ -12,6 +12,7 @@ Item {
     property color mutedColor: darkMode ? "#909191" : "#aeb1b5"
     property color accentColor: "#428bca"
     property color selectionFill: "#186a9a"
+    property url folderUrl
     property string folderName: ""
     property bool folderHasParent: false
     property var entries: []
@@ -39,41 +40,86 @@ Item {
             ? entries[list.currentIndex].name : ""
     readonly property alias listHasFocus: list.activeFocus
 
+    // Held by name: the model is rebuilt from scratch every time the folder is
+    // re-read, and an index into it survives nothing.
+    property string selectedEntryName: ""
+
     width: expanded ? Math.round(logicalWidth * root.textScale) : 0
     visible: width > 0
     clip: true
 
     onExpandedChanged: if (!expanded) cancelNewEntry()
-    onEntriesChanged: list.currentIndex = entries.length > 0 ? 0 : -1
+    onFolderUrlChanged: selectedEntryName = ""
+    // Deferred: the list also resets its own index when the model is replaced.
+    onEntriesChanged: Qt.callLater(restoreSelection)
 
     function focusList() {
         list.forceActiveFocus();
-        if (list.currentIndex < 0 && root.entries.length > 0)
-            list.currentIndex = 0;
+        var open = indexOfUrl(root.currentFileUrl);
+        if (open >= 0)
+            selectIndex(open);
+        else
+            restoreSelection();
+    }
+
+    function indexOfName(name) {
+        if (name.length === 0)
+            return -1;
+        for (var i = 0; i < root.entries.length; i++) {
+            if (root.entries[i].name === name)
+                return i;
+        }
+        return -1;
+    }
+
+    function indexOfUrl(entryUrl) {
+        var target = entryUrl.toString();
+        if (target.length === 0)
+            return -1;
+        for (var i = 0; i < root.entries.length; i++) {
+            if (root.entries[i].url.toString() === target)
+                return i;
+        }
+        return -1;
+    }
+
+    // The one way the selection moves, so the remembered name never drifts.
+    function selectIndex(index) {
+        if (index < 0 || index >= root.entries.length)
+            return;
+        list.currentIndex = index;
+        root.selectedEntryName = root.entries[index].name;
+    }
+
+    // The folder is re-read whenever anything in it changes — saving is enough
+    // — so keep the selection on the row it was on.
+    function restoreSelection() {
+        if (root.entries.length === 0) {
+            list.currentIndex = -1;
+            return;
+        }
+        var index = indexOfName(root.selectedEntryName);
+        if (index < 0)
+            index = indexOfUrl(root.currentFileUrl);
+        selectIndex(Math.max(0, index));
     }
 
     // After making something, the selection sits on it rather than snapping
     // back to the top of the folder.
     function selectUrl(entryUrl) {
-        var target = entryUrl.toString();
-        for (var i = 0; i < root.entries.length; i++) {
-            if (root.entries[i].url.toString() === target) {
-                list.currentIndex = i;
-                return;
-            }
-        }
+        selectIndex(indexOfUrl(entryUrl));
     }
 
     function selectNext() {
         if (root.entries.length === 0)
             return;
-        list.currentIndex = Math.min(root.entries.length - 1, list.currentIndex + 1);
+        selectIndex(Math.min(root.entries.length - 1, list.currentIndex + 1));
     }
 
     function selectPrevious() {
         if (root.entries.length === 0)
             return;
-        list.currentIndex = Math.max(0, list.currentIndex - 1);
+        selectIndex(Math.max(0, list.currentIndex - 1));
     }
 
     // Enter opens a document or walks into a folder, the one key doing what
@@ -323,7 +369,7 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                    list.currentIndex = row.index;
+                    root.selectIndex(row.index);
                     if (row.modelData.isDir)
                         root.folderRequested(row.modelData.url);
                     else

@@ -30,17 +30,18 @@ ApplicationWindow {
         Math.round(writerFontMetrics.averageCharacterWidth * 65),
         Math.max(360, width - fileSidebar.width
                  - Math.round(writerFontMetrics.averageCharacterWidth * 20)))
-    property bool closeConfirmed: false
     property bool searchOpen: false
     property bool sidebarOpen: false
     property int sidebarLogicalWidth: 240
     property bool searchUpdating: false
     property var searchMatches: []
     property int searchMatchIndex: -1
+    property bool closeConfirmed: false
     property url pendingOpenUrl
     property string pendingAction: ""
     property bool replaceOpen: false
     property bool awaitingPendingSave: false
+    property bool keyboardWaitingForDialog: false
 
     Material.theme: darkMode ? Material.Dark : Material.Light
     Material.accent: backend.themeAccent
@@ -87,6 +88,60 @@ ApplicationWindow {
         } else if (action === "open") {
             backend.open(pendingOpenUrl);
         }
+    }
+
+    // A closing modal hands focus back to whatever held it before it opened,
+    // so wait it out rather than race it.
+    function handKeyboardToEditor() {
+        if (unsavedChangesDialog.visible || externalChangeDialog.visible) {
+            keyboardWaitingForDialog = true;
+            return;
+        }
+        editor.forceActiveFocus();
+    }
+
+    function releaseKeyboardAfterDialog() {
+        if (!keyboardWaitingForDialog)
+            return;
+        keyboardWaitingForDialog = false;
+        editor.forceActiveFocus();
+    }
+
+    // The editor places the caret item when the cursor moves and never again
+    // while the text is re-laid out under it — which is what loading a
+    // document does, after the caret has been placed.
+    property bool settlingCaret: false
+
+    Component {
+        id: caretShape
+
+        Rectangle {
+            width: 1
+            color: win.strongTextColor
+            opacity: editor.activeFocus ? 1 : 0
+            x: editor.cursorRectangle.x
+            y: editor.cursorRectangle.y
+            height: editor.cursorRectangle.height
+        }
+    }
+
+    function settleCaret() {
+        if (!settlingCaret)
+            return;
+
+        // A fresh delegate is built against the finished text. Both
+        // assignments land in one turn, so no frame is drawn without a caret.
+        editor.cursorDelegate = null;
+        editor.cursorDelegate = caretShape;
+        editorFlick.ensureCursorVisible();
+    }
+
+    // The net for a relayout that arrives after the load is announced.
+    Timer {
+        id: caretSettleWindow
+        interval: 400
+
+        onTriggered: win.settlingCaret = false
     }
 
     FontMetrics {
@@ -281,6 +336,14 @@ ApplicationWindow {
                 win.completePendingAction();
         }
 
+        function onDocumentLoaded() {
+            editor.cursorPosition = editor.length;
+            win.settlingCaret = true;
+            win.settleCaret();
+            caretSettleWindow.restart();
+            win.handKeyboardToEditor();
+        }
+
         function onExternalChangeDetected(deleted, locallyModified) {
             externalChangeDialog.deleted = deleted;
             externalChangeDialog.locallyModified = locallyModified;
@@ -311,6 +374,7 @@ ApplicationWindow {
 
     UnsavedChangesDialog {
         id: unsavedChangesDialog
+        objectName: "unsavedChangesDialog"
         fileName: backend.fileName
         darkMode: win.darkMode
         textScale: win.textScale
@@ -330,6 +394,7 @@ ApplicationWindow {
             backend.save();
         }
         onCancelRequested: win.pendingAction = ""
+        onClosed: win.releaseKeyboardAfterDialog()
     }
 
     ExternalChangeDialog {
@@ -343,6 +408,7 @@ ApplicationWindow {
 
         onKeepRequested: backend.keepExternalVersion()
         onReloadRequested: backend.reloadFromDisk()
+        onClosed: win.releaseKeyboardAfterDialog()
     }
 
     Dialog {
@@ -371,6 +437,7 @@ ApplicationWindow {
         mutedColor: win.mutedColor
         accentColor: backend.themeAccent
         selectionFill: win.selectionFill
+        folderUrl: backend.folderUrl
         folderName: backend.folderName
         folderHasParent: backend.folderHasParent
         entries: backend.folderEntries
@@ -407,6 +474,7 @@ ApplicationWindow {
 
         Flickable {
             id: editorFlick
+            objectName: "editorFlick"
             anchors.fill: parent
             anchors.leftMargin: 24
             anchors.rightMargin: 24
@@ -624,11 +692,9 @@ ApplicationWindow {
                 // the compositor delivers the fractional scale after the
                 // first frame). Fall back to Qt's scalable renderer there.
                 renderType: Screen.devicePixelRatio % 1 === 0 ? TextEdit.NativeRendering : TextEdit.QtRendering
-                cursorDelegate: Rectangle {
-                    width: 1
-                    color: win.strongTextColor
-                }
+                cursorDelegate: caretShape
                 onCursorRectangleChanged: editorFlick.ensureCursorVisible()
+                onContentSizeChanged: win.settleCaret()
 
                 function replaceSelectionWith(replacement) {
                     var start = Math.min(selectionStart, selectionEnd);
@@ -844,6 +910,8 @@ ApplicationWindow {
                     if (win.searchUpdating)
                         return;
                     var contentChanged = backend.editorTextChanged();
+                    if (contentChanged)
+                        win.settlingCaret = false;
                     if (win.searchOpen && contentChanged)
                         win.updateSearch();
                 }

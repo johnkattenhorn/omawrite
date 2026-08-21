@@ -31,18 +31,25 @@ Install via the Omarchy Package Repository via the `omawrite` package. It's inst
 ## Sidebar
 
 The sidebar lists the folder the open document lives in — Markdown files and
-the folders beside them, nothing else. Clicking a document opens it, guarded by
-the same unsaved-changes prompt as `Ctrl+O`.
+the folders beside them, nothing else. Opening a document puts the cursor after
+everything already written in it, so writing carries on with the sidebar still
+open, and the document you are leaving is saved on the way out rather than
+asked about.
 
 With the keyboard, once `Ctrl+E` has put focus there:
 
 - `Up`/`Down` or `j`/`k` move through the folder.
-- `Enter`, `Right`, or `l` opens a document, or walks into a folder.
+- `Enter`, `Right`, or `l` opens a document and hands the keyboard back to the
+  text, or walks into a folder and stays put.
 - `Backspace`, `Left`, or `h` goes up a level.
 - `a` starts a new Markdown file and `A` a new folder; type the name and press
   `Enter`, or `Esc` to abandon it. A new document opens straight away, and an
   existing name is reported rather than overwritten.
 - `Esc` returns to writing, leaving the sidebar open.
+
+The folder is re-read whenever anything in it changes, and the selection keeps
+its place through that rather than snapping back to the top. Opening the panel
+starts from the document being written.
 
 Drag its right edge to widen it; the width is remembered, and stops short of
 squeezing the writing column below its usual measure.

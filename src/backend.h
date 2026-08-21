@@ -105,6 +105,7 @@ signals:
     void saveSucceeded();
     void externalChangeDetected(bool deleted, bool locallyModified);
     void folderChanged();
+    void documentLoaded();
 
 private:
     void loadDocumentText(const QString &text);
