@@ -116,6 +116,7 @@ Backend::Backend(QObject *parent) : QObject(parent) {
                     }
                 }
 
+                m_externalChangePending = true;
                 emit externalChangeDetected(deleted, m_modified);
             });
 
@@ -309,23 +310,32 @@ void Backend::saveNow() {
     persistDocument();
 }
 
-void Backend::saveBeforeLeaving() {
+// False when the work could not be written where it belongs, so the caller can
+// decline to move on and leave the writer looking at their own text.
+bool Backend::saveBeforeLeaving() {
     m_persistTimer.stop();
 
     if (m_fileUrl.isLocalFile()) {
-        if (m_modified)
-            saveTo(m_fileUrl);
-        return;
+        if (!m_modified)
+            return true;
+        if (!m_externalChangePending && saveTo(m_fileUrl))
+            return true;
+        writeRecovery();
+        return false;
     }
 
     const QString text = currentDocumentText();
     if (text.trimmed().isEmpty()) {
         clearRecovery();
         setModified(false);
-        return;
+        return true;
     }
 
-    saveTo(unusedDocumentUrl(suggestedFileName(text)));
+    if (saveTo(unusedDocumentUrl(suggestedFileName(text))))
+        return true;
+
+    writeRecovery();
+    return false;
 }
 
 void Backend::saveForClose() {
@@ -355,11 +365,13 @@ void Backend::discardRecovery() {
 }
 
 void Backend::reloadFromDisk() {
+    m_externalChangePending = false;
     if (m_fileUrl.isLocalFile())
         open(m_fileUrl);
 }
 
 void Backend::keepExternalVersion() {
+    m_externalChangePending = false;
     QFile file(m_fileUrl.toLocalFile());
     if (file.open(QIODevice::ReadOnly)) {
         m_lastKnownFileContents = file.readAll();
@@ -562,11 +574,11 @@ void Backend::setStatus(const QString &status) {
     emit statusChanged();
 }
 
-void Backend::saveTo(const QUrl &url) {
+bool Backend::saveTo(const QUrl &url) {
     if (!url.isLocalFile()) {
         m_closeAfterSave = false;
         setStatus(QStringLiteral("Only local files can be saved."));
-        return;
+        return false;
     }
 
     const QString targetName = QFileInfo(url.toLocalFile()).fileName();
@@ -574,7 +586,7 @@ void Backend::saveTo(const QUrl &url) {
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         m_closeAfterSave = false;
         setStatus(QStringLiteral("Could not save %1.").arg(targetName));
-        return;
+        return false;
     }
 
     const QByteArray contents = currentDocumentText().toUtf8();
@@ -592,7 +604,7 @@ void Backend::saveTo(const QUrl &url) {
         watchCurrentFile();
         m_closeAfterSave = false;
         setStatus(QStringLiteral("Could not write %1.").arg(targetName));
-        return;
+        return false;
     }
 
     const bool shouldClose = m_closeAfterSave;
@@ -610,22 +622,24 @@ void Backend::saveTo(const QUrl &url) {
 
     if (shouldClose)
         emit closeAfterSave();
+
+    return true;
 }
 
 void Backend::schedulePersist() {
     m_persistTimer.start();
 }
 
-// A named document is written to its file; one that has never been named keeps
-// a recovery draft until it is left.
+// A named document is written to its file. Anything that stops that — an
+// unwritable file, or an outside change the writer has not answered yet, which
+// is not ours to overwrite — falls back to the recovery draft, so quitting
+// after a failed save still comes back.
 void Backend::persistDocument() {
     if (!m_modified)
         return;
 
-    if (m_fileUrl.isLocalFile()) {
-        saveTo(m_fileUrl);
+    if (m_fileUrl.isLocalFile() && !m_externalChangePending && saveTo(m_fileUrl))
         return;
-    }
 
     writeRecovery();
 }

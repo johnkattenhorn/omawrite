@@ -658,6 +658,102 @@ private slots:
                  QStringLiteral("one last thought"));
     }
 
+    void keepsTheWorkWhenTheFileCannotBeWritten() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("locked.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly));
+        seed.write("on disk");
+        seed.close();
+        // A real document to switch to, so the refusal is what stops the
+        // switch rather than a target that was never openable.
+        const QString other = folder.filePath(QStringLiteral("other.md"));
+        QFile neighbour(other);
+        QVERIFY(neighbour.open(QIODevice::WriteOnly));
+        neighbour.write("somewhere else");
+        neighbour.close();
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+        editor->setProperty("text", QStringLiteral("work that must not vanish"));
+        QVERIFY(backend.modified());
+
+        // A directory that cannot be written to is the same to QSaveFile as any
+        // other failed write.
+        QVERIFY(QFile::setPermissions(folder.path(), QFileDevice::ReadOwner
+                                                     | QFileDevice::ExeOwner));
+
+        QVERIFY2(!backend.saveBeforeLeaving(), "a failed save must report itself");
+
+        // Leaving is refused, so the writer is still looking at their own text.
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "requestOpen",
+                                          Q_ARG(QVariant, QVariant(QUrl::fromLocalFile(other)))));
+        QCOMPARE(editor->property("text").toString(),
+                 QStringLiteral("work that must not vanish"));
+        QVERIFY(backend.modified());
+
+        QVERIFY(QFile::setPermissions(folder.path(), QFileDevice::ReadOwner
+                                                     | QFileDevice::WriteOwner
+                                                     | QFileDevice::ExeOwner));
+    }
+
+    void doesNotAutosaveOverAnUnansweredExternalChange() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("shared.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly));
+        seed.write("original");
+        seed.close();
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+        editor->setProperty("text", QStringLiteral("my version"));
+        QVERIFY(backend.modified());
+
+        QSignalSpy conflict(&backend, &Backend::externalChangeDetected);
+        QFile outside(path);
+        QVERIFY(outside.open(QIODevice::WriteOnly));
+        outside.write("their version");
+        outside.close();
+        QTRY_COMPARE(conflict.count(), 1);
+
+        // The file on disk is not ours to overwrite until that is answered, so
+        // the work waits in a draft rather than landing on top of it.
+        QVERIFY(QMetaObject::invokeMethod(&backend, "saveNow"));
+        QFile after(path);
+        QVERIFY(after.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(after.readAll()), QStringLiteral("their version"));
+        after.close();
+        QVERIFY(backend.modified());
+
+        // Once it is answered, keeping your version saves over it as asked.
+        backend.keepExternalVersion();
+        QVERIFY(QMetaObject::invokeMethod(&backend, "saveNow"));
+        QFile kept(path);
+        QVERIFY(kept.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(kept.readAll()), QStringLiteral("my version"));
+    }
+
     void namesAnUntitledDocumentFromItsFirstLine() {
         QTemporaryDir folder;
         QVERIFY(folder.isValid());

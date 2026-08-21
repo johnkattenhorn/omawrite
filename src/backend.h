@@ -74,7 +74,7 @@ public:
     Q_INVOKABLE void open(const QUrl &url);
     Q_INVOKABLE void save();
     Q_INVOKABLE void saveNow();
-    Q_INVOKABLE void saveBeforeLeaving();
+    Q_INVOKABLE bool saveBeforeLeaving();
     Q_INVOKABLE void saveForClose();
     Q_INVOKABLE void saveAsDialog();
     Q_INVOKABLE void saveAs(const QUrl &url);
@@ -114,7 +114,7 @@ private:
     void setFileUrl(const QUrl &url);
     void setModified(bool modified);
     void setStatus(const QString &status);
-    void saveTo(const QUrl &url);
+    bool saveTo(const QUrl &url);
     QUrl suggestedSaveUrl() const;
     QDir defaultDirectory() const;
     void applyFolder(const QString &path, bool remember);
@@ -159,6 +159,7 @@ private:
     QString m_lastDocumentText;
     QByteArray m_lastKnownFileContents;
     bool m_hasKnownFileContents = false;
+    bool m_externalChangePending = false;
     QString m_recoveryPath;
     std::unique_ptr<QLockFile> m_recoveryLock;
 

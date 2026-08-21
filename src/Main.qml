@@ -59,7 +59,11 @@ ApplicationWindow {
     }
 
     function requestOpen(url) {
-        backend.saveBeforeLeaving();
+        // Refuse to swap the document out from under work that could not be
+        // written; the status line says why. Closing still goes through, on
+        // the recovery draft saveBeforeLeaving leaves behind.
+        if (!backend.saveBeforeLeaving())
+            return;
         backend.open(url);
     }
 
