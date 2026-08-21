@@ -48,7 +48,7 @@ ApplicationWindow {
     // to put it, so the first close is refused and says so; a second one is
     // taken as meaning it.
     onClosing: function(close) {
-        if (closeAnyway || backend.saveBeforeLeaving() || backend.hasRecoveredCopy())
+        if (closeAnyway || backend.saveBeforeClosing())
             return;
         close.accepted = false;
         closeAnyway = true;

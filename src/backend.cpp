@@ -310,21 +310,14 @@ void Backend::saveNow() {
     persistDocument();
 }
 
-// False when the work did not reach the document's own file, so switching away
-// can decline and leave the writer looking at their own text. It still lands in
-// a recovery draft either way; hasRecoveredCopy() reports whether that worked,
-// which is the weaker question closing has to ask.
-bool Backend::saveBeforeLeaving() {
-    m_persistTimer.stop();
+// The file the document belongs in: its own if it has one, one named from its
+// first line if it does not. False when the write did not land there.
+bool Backend::saveToItsOwnFile() {
+    if (!m_modified)
+        return true;
 
-    if (m_fileUrl.isLocalFile()) {
-        if (!m_modified)
-            return true;
-        if (saveTo(m_fileUrl))
-            return true;
-        writeRecovery();
-        return false;
-    }
+    if (m_fileUrl.isLocalFile())
+        return saveTo(m_fileUrl);
 
     const QString text = currentDocumentText();
     if (text.trimmed().isEmpty()) {
@@ -333,10 +326,33 @@ bool Backend::saveBeforeLeaving() {
         return true;
     }
 
-    if (saveTo(unusedDocumentUrl(suggestedFileName(text))))
+    return saveTo(unusedDocumentUrl(suggestedFileName(text)));
+}
+
+// Switching documents asks the strict question: the work has to have reached
+// the file it belongs in, because the writer is about to lose sight of it.
+bool Backend::saveBeforeLeaving() {
+    m_persistTimer.stop();
+
+    if (saveToItsOwnFile())
         return true;
 
+    // Worth a draft even though the switch is declined.
     writeRecovery();
+    return false;
+}
+
+// Closing asks the weaker one: anywhere at all will do. It has to be the draft
+// written for this attempt, though — an older one on disk proves only that
+// something was saved once, not that it holds what is on screen now.
+bool Backend::saveBeforeClosing() {
+    m_persistTimer.stop();
+
+    if (saveToItsOwnFile() || writeRecovery())
+        return true;
+
+    setStatus(QStringLiteral("Could not save %1 anywhere; close again to discard.")
+                  .arg(fileName()));
     return false;
 }
 
@@ -652,11 +668,6 @@ void Backend::persistDocument() {
         return;
 
     writeRecovery();
-}
-
-bool Backend::hasRecoveredCopy() const {
-    const QString path = recoveryPath();
-    return !path.isEmpty() && QFileInfo::exists(path);
 }
 
 QString Backend::recoveryPath() const {

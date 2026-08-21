@@ -75,7 +75,7 @@ public:
     Q_INVOKABLE void save();
     Q_INVOKABLE void saveNow();
     Q_INVOKABLE bool saveBeforeLeaving();
-    Q_INVOKABLE bool hasRecoveredCopy() const;
+    Q_INVOKABLE bool saveBeforeClosing();
     Q_INVOKABLE void saveForClose();
     Q_INVOKABLE void saveAsDialog();
     Q_INVOKABLE void saveAs(const QUrl &url);
@@ -128,6 +128,7 @@ private:
     void reapplyTypographyToChange();
     void schedulePersist();
     void persistDocument();
+    bool saveToItsOwnFile();
     bool writeRecovery();
     QUrl unusedDocumentUrl(const QString &fileName) const;
     void restoreRecovery();

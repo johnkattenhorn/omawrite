@@ -813,6 +813,71 @@ private slots:
         QCOMPARE(second.fileName(), QStringLiteral("Field notes 2.md"));
     }
 
+    void doesNotSettleForAnOlderDraftWhenClosing() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        QTemporaryDir state;
+        QVERIFY(state.isValid());
+        const QString path = folder.filePath(QStringLiteral("draft.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly));
+        seed.close();
+
+        qputenv("XDG_DATA_HOME", state.path().toUtf8());
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+
+        // A draft of an older version, made when the document itself could not
+        // be written but the draft still could.
+        QVERIFY(QFile::setPermissions(folder.path(), QFileDevice::ReadOwner
+                                                     | QFileDevice::ExeOwner));
+        editor->setProperty("text", QStringLiteral("old version"));
+        QVERIFY(QMetaObject::invokeMethod(&backend, "saveNow"));
+
+        const QString appData =
+            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QVERIFY(appData.startsWith(state.path()));
+        QDir drafts(appData);
+        const QStringList written = drafts.entryList({QStringLiteral("*.json")}, QDir::Files);
+        QCOMPARE(written.size(), 1);
+        const QString draftPath = drafts.filePath(written.first());
+
+        // Newer work, and now nowhere at all to put it.
+        editor->setProperty("text", QStringLiteral("new version"));
+        QVERIFY(QFile::setPermissions(appData, QFileDevice::ReadOwner
+                                               | QFileDevice::ExeOwner));
+
+        // The old draft is still sitting there, but it holds the wrong text, so
+        // it is no reason to let the window take the new text with it.
+        QVERIFY2(!backend.saveBeforeClosing(),
+                 "an older draft does not stand in for this attempt");
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "close"));
+        QVERIFY(window->property("visible").toBool());
+
+        QFile stale(draftPath);
+        QVERIFY(stale.open(QIODevice::ReadOnly));
+        QVERIFY2(QString::fromUtf8(stale.readAll()).contains(QStringLiteral("old version")),
+                 "the draft on disk is the older one, which is the point");
+        stale.close();
+
+        QVERIFY(QFile::setPermissions(appData, QFileDevice::ReadOwner
+                                               | QFileDevice::WriteOwner
+                                               | QFileDevice::ExeOwner));
+        QVERIFY(QFile::setPermissions(folder.path(), QFileDevice::ReadOwner
+                                                     | QFileDevice::WriteOwner
+                                                     | QFileDevice::ExeOwner));
+        qunsetenv("XDG_DATA_HOME");
+    }
+
     void refusesTheFirstCloseWhenTheWorkFitsNowhere() {
         QTemporaryDir folder;
         QVERIFY(folder.isValid());
@@ -848,9 +913,8 @@ private slots:
         QVERIFY(QFile::setPermissions(appData, QFileDevice::ReadOwner
                                                | QFileDevice::ExeOwner));
 
-        QVERIFY(!backend.saveBeforeLeaving());
-        QVERIFY2(!backend.hasRecoveredCopy(),
-                 "with nowhere to write, there is no draft either");
+        QVERIFY2(!backend.saveBeforeClosing(),
+                 "with nowhere to write, the work reached nowhere");
 
         // The first close is refused rather than dropping the only copy; the
         // second is taken as meaning it.
