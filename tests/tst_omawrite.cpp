@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QFont>
 #include <QQmlComponent>
@@ -760,15 +761,121 @@ private slots:
         const QString copy = folder.filePath(QStringLiteral("copy.md"));
         backend.saveAs(QUrl::fromLocalFile(copy));
         QVERIFY(QFileInfo::exists(copy));
+
+        // The prompt is the only way out, so it cannot be dismissed. Escape
+        // would have to mean keep, or reload, or neither, and each of those
+        // answers the question on the writer's behalf.
+        QObject *prompt = window->findChild<QObject *>(
+            QStringLiteral("externalChangeDialog"));
+        QVERIFY(prompt);
+        QCOMPARE(prompt->property("closePolicy").toInt(), 0);  // Popup.NoAutoClose
+
+        // A conflict is about one file. Opening another document ends it,
+        // rather than following the writer and refusing to save that one too.
+        const QString elsewhere = folder.filePath(QStringLiteral("elsewhere.md"));
+        QFile other(elsewhere);
+        QVERIFY(other.open(QIODevice::WriteOnly));
+        other.close();
+        backend.open(QUrl::fromLocalFile(elsewhere));
+        editor->setProperty("text", QStringLiteral("a different document"));
+        QVERIFY(QMetaObject::invokeMethod(&backend, "saveNow"));
+        QFile unrelated(elsewhere);
+        QVERIFY(unrelated.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(unrelated.readAll()),
+                 QStringLiteral("a different document"));
+        unrelated.close();
+
         backend.open(QUrl::fromLocalFile(path));
         editor->setProperty("text", QStringLiteral("my version"));
 
         // Once it is answered, keeping your version saves over it as asked.
+        // A second outside change still gets through. This one replaces the
+        // file the way another editor's atomic save does, which takes the old
+        // inode — and the watched path with it — out from under the watcher.
+        QSignalSpy second(&backend, &Backend::externalChangeDetected);
+        QSaveFile replacement(path);
+        QVERIFY(replacement.open(QIODevice::WriteOnly));
+        replacement.write("changed once more");
+        QVERIFY(replacement.commit());
+        QTRY_COMPARE(second.count(), 1);
+
         backend.keepExternalVersion();
         QVERIFY(QMetaObject::invokeMethod(&backend, "saveNow"));
         QFile kept(path);
         QVERIFY(kept.open(QIODevice::ReadOnly));
         QCOMPARE(QString::fromUtf8(kept.readAll()), QStringLiteral("my version"));
+    }
+
+    void asksAgainWhenTheFileIsReplacedTwice() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("contested.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly));
+        seed.write("original");
+        seed.close();
+
+        Backend backend;
+        backend.open(QUrl::fromLocalFile(path));
+
+        QSignalSpy conflict(&backend, &Backend::externalChangeDetected);
+
+        // An atomic save from another editor replaces the file rather than
+        // rewriting it, which takes the watched inode away with it.
+        QSaveFile first(path);
+        QVERIFY(first.open(QIODevice::WriteOnly));
+        first.write("theirs");
+        QVERIFY(first.commit());
+        QTRY_COMPARE(conflict.count(), 1);
+
+        // Nothing has answered the prompt, and nothing has re-opened the file.
+        // A second replacement still has to reach the writer, or the one
+        // chance to ask went with the first inode.
+        QSaveFile again(path);
+        QVERIFY(again.open(QIODevice::WriteOnly));
+        again.write("theirs, again");
+        QVERIFY(again.commit());
+        QTRY_COMPARE(conflict.count(), 2);
+    }
+
+    void reloadingAlsoEndsTheConflict() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("shared.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly));
+        seed.write("original");
+        seed.close();
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+        editor->setProperty("text", QStringLiteral("mine"));
+
+        QSignalSpy conflict(&backend, &Backend::externalChangeDetected);
+        QFile outside(path);
+        QVERIFY(outside.open(QIODevice::WriteOnly));
+        outside.write("theirs");
+        outside.close();
+        QTRY_COMPARE(conflict.count(), 1);
+
+        // Taking their version is the other answer, and saving resumes on it.
+        backend.reloadFromDisk();
+        QCOMPARE(editor->property("text").toString(), QStringLiteral("theirs"));
+        editor->setProperty("text", QStringLiteral("theirs, then mine"));
+        QVERIFY(QMetaObject::invokeMethod(&backend, "saveNow"));
+        QFile after(path);
+        QVERIFY(after.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(after.readAll()),
+                 QStringLiteral("theirs, then mine"));
     }
 
     void namesAnUntitledDocumentFromItsFirstLine() {

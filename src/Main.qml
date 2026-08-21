@@ -345,6 +345,7 @@ ApplicationWindow {
 
     ExternalChangeDialog {
         id: externalChangeDialog
+        objectName: "externalChangeDialog"
         darkMode: win.darkMode
         textScale: win.textScale
         textColor: win.textColor

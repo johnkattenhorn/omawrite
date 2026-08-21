@@ -118,6 +118,9 @@ Backend::Backend(QObject *parent) : QObject(parent) {
 
                 m_externalChangePending = true;
                 emit externalChangeDetected(deleted, m_modified);
+                // A replacement leaves the old inode behind, and the path with
+                // it, so re-arm or a second change would never be noticed.
+                watchCurrentFile();
             });
 
     connect(&m_folderWatcher, &QFileSystemWatcher::directoryChanged, this,
@@ -273,6 +276,9 @@ void Backend::saveSidebarWidth(int width) {
 }
 
 void Backend::open(const QUrl &url) {
+    // Whatever was contested, this is a different document now.
+    m_externalChangePending = false;
+
     if (!url.isLocalFile()) {
         setStatus(QStringLiteral("Only local files can be opened."));
         return;
