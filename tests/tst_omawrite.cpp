@@ -347,7 +347,6 @@ private slots:
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
         QVERIFY2(window, qPrintable(component.errorString()));
-        window->setProperty("visible", false);
 
         QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
         QVERIFY(editor);
@@ -372,8 +371,17 @@ private slots:
             + viewport->property("height").toReal() + 200;
         viewport->setProperty("contentY", readingAt);
         QCOMPARE(viewport->property("contentY").toReal(), readingAt);
-        window->setProperty("height", 900);
+        const qreal viewportBefore = viewport->property("height").toReal();
+        window->setProperty("height", window->property("height").toReal() + 80);
         QTest::qWait(50);
+        // A resize the layout never receives leaves the page in place for the
+        // wrong reason, and everything below it would then pass on anything.
+        QVERIFY2(qAbs(viewport->property("height").toReal() - (viewportBefore + 80)) <= 2,
+                 qPrintable(QStringLiteral("the resize never reached the editor: viewport %1, "
+                                           "expected %2. Run this through bin/test, which "
+                                           "forces QT_QPA_PLATFORM=offscreen.")
+                                .arg(viewport->property("height").toReal())
+                                .arg(viewportBefore + 80)));
         const qreal stillReadingAt = viewport->property("contentY").toReal();
         QVERIFY2(qAbs(stillReadingAt - readingAt) <= 2,
                  qPrintable(QStringLiteral("the page moved from %1 to %2")
