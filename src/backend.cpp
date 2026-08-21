@@ -310,15 +310,17 @@ void Backend::saveNow() {
     persistDocument();
 }
 
-// False when the work could not be written where it belongs, so the caller can
-// decline to move on and leave the writer looking at their own text.
+// False when the work did not reach the document's own file, so switching away
+// can decline and leave the writer looking at their own text. It still lands in
+// a recovery draft either way; hasRecoveredCopy() reports whether that worked,
+// which is the weaker question closing has to ask.
 bool Backend::saveBeforeLeaving() {
     m_persistTimer.stop();
 
     if (m_fileUrl.isLocalFile()) {
         if (!m_modified)
             return true;
-        if (!m_externalChangePending && saveTo(m_fileUrl))
+        if (saveTo(m_fileUrl))
             return true;
         writeRecovery();
         return false;
@@ -575,6 +577,14 @@ void Backend::setStatus(const QString &status) {
 }
 
 bool Backend::saveTo(const QUrl &url) {
+    // The prompt is on screen asking which version to keep, so the file is not
+    // ours to write until it is answered. Saving somewhere else is still fine.
+    if (m_externalChangePending && url == m_fileUrl) {
+        setStatus(QStringLiteral("%1 changed on disk; answer that first.")
+                      .arg(fileName()));
+        return false;
+    }
+
     if (!url.isLocalFile()) {
         m_closeAfterSave = false;
         setStatus(QStringLiteral("Only local files can be saved."));
@@ -638,30 +648,35 @@ void Backend::persistDocument() {
     if (!m_modified)
         return;
 
-    if (m_fileUrl.isLocalFile() && !m_externalChangePending && saveTo(m_fileUrl))
+    if (m_fileUrl.isLocalFile() && saveTo(m_fileUrl))
         return;
 
     writeRecovery();
+}
+
+bool Backend::hasRecoveredCopy() const {
+    const QString path = recoveryPath();
+    return !path.isEmpty() && QFileInfo::exists(path);
 }
 
 QString Backend::recoveryPath() const {
     return m_recoveryPath;
 }
 
-void Backend::writeRecovery() {
+bool Backend::writeRecovery() {
     if (!m_modified)
-        return;
+        return true;
     const QString path = recoveryPath();
     if (path.isEmpty())
-        return;
+        return false;
     QDir().mkpath(QFileInfo(path).absolutePath());
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly))
-        return;
+        return false;
     const QJsonObject recovery{{QStringLiteral("fileUrl"), m_fileUrl.toString()},
                                {QStringLiteral("text"), currentDocumentText()}};
     file.write(QJsonDocument(recovery).toJson(QJsonDocument::Compact));
-    file.commit();
+    return file.commit();
 }
 
 void Backend::restoreRecovery() {

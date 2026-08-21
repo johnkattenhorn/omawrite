@@ -38,12 +38,21 @@ ApplicationWindow {
     property int searchMatchIndex: -1
     property bool replaceOpen: false
     property bool keyboardWaitingForDialog: false
+    property bool closeAnyway: false
 
     Material.theme: darkMode ? Material.Dark : Material.Light
     Material.accent: backend.themeAccent
     color: pageColor
 
-    onClosing: backend.saveBeforeLeaving()
+    // If the work reached neither its file nor a draft there is nowhere left
+    // to put it, so the first close is refused and says so; a second one is
+    // taken as meaning it.
+    onClosing: function(close) {
+        if (closeAnyway || backend.saveBeforeLeaving() || backend.hasRecoveredCopy())
+            return;
+        close.accepted = false;
+        closeAnyway = true;
+    }
     onActiveChanged: if (!active) backend.saveNow()
 
     function setSidebarOpen(open) {

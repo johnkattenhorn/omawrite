@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <QStandardPaths>
 #include <QFont>
 #include <QQmlComponent>
 #include <QQmlContext>
@@ -746,6 +747,22 @@ private slots:
         after.close();
         QVERIFY(backend.modified());
 
+        // Pressing Ctrl+S does not pre-empt the question either: the prompt is
+        // on screen asking which version to keep.
+        backend.save();
+        QFile stillTheirs(path);
+        QVERIFY(stillTheirs.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(stillTheirs.readAll()),
+                 QStringLiteral("their version"));
+        stillTheirs.close();
+
+        // Saving somewhere else is not the contested file, so it goes through.
+        const QString copy = folder.filePath(QStringLiteral("copy.md"));
+        backend.saveAs(QUrl::fromLocalFile(copy));
+        QVERIFY(QFileInfo::exists(copy));
+        backend.open(QUrl::fromLocalFile(path));
+        editor->setProperty("text", QStringLiteral("my version"));
+
         // Once it is answered, keeping your version saves over it as asked.
         backend.keepExternalVersion();
         QVERIFY(QMetaObject::invokeMethod(&backend, "saveNow"));
@@ -794,6 +811,60 @@ private slots:
         secondEditor->setProperty("text", QStringLiteral("Field notes\n\nagain"));
         QVERIFY(QMetaObject::invokeMethod(&second, "saveBeforeLeaving"));
         QCOMPARE(second.fileName(), QStringLiteral("Field notes 2.md"));
+    }
+
+    void refusesTheFirstCloseWhenTheWorkFitsNowhere() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        QTemporaryDir state;
+        QVERIFY(state.isValid());
+        const QString path = folder.filePath(QStringLiteral("stuck.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly));
+        seed.close();
+
+        // A recovery slot of its own, so taking it away takes away the last
+        // place the work could go.
+        qputenv("XDG_DATA_HOME", state.path().toUtf8());
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+        editor->setProperty("text", QStringLiteral("the only copy"));
+        QVERIFY(backend.modified());
+
+        const QString appData =
+            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QVERIFY(appData.startsWith(state.path()));
+        QVERIFY(QFile::setPermissions(folder.path(), QFileDevice::ReadOwner
+                                                     | QFileDevice::ExeOwner));
+        QVERIFY(QFile::setPermissions(appData, QFileDevice::ReadOwner
+                                               | QFileDevice::ExeOwner));
+
+        QVERIFY(!backend.saveBeforeLeaving());
+        QVERIFY2(!backend.hasRecoveredCopy(),
+                 "with nowhere to write, there is no draft either");
+
+        // The first close is refused rather than dropping the only copy; the
+        // second is taken as meaning it.
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "close"));
+        QVERIFY(window->property("visible").toBool());
+        QVERIFY(window->property("closeAnyway").toBool());
+
+        QVERIFY(QFile::setPermissions(appData, QFileDevice::ReadOwner
+                                               | QFileDevice::WriteOwner
+                                               | QFileDevice::ExeOwner));
+        QVERIFY(QFile::setPermissions(folder.path(), QFileDevice::ReadOwner
+                                                     | QFileDevice::WriteOwner
+                                                     | QFileDevice::ExeOwner));
+        qunsetenv("XDG_DATA_HOME");
     }
 
     void discardsAnEmptyUntitledDocument() {
