@@ -13,7 +13,7 @@ ApplicationWindow {
     minimumWidth: 720
     minimumHeight: 520
     visible: true
-    title: (backend.modified ? "* " : "") + backend.fileName + " - Omawrite"
+    title: backend.fileName + " - Omawrite"
 
     readonly property bool darkMode: backend.darkMode
     readonly property color pageColor: backend.themeBackground
@@ -36,26 +36,15 @@ ApplicationWindow {
     property bool searchUpdating: false
     property var searchMatches: []
     property int searchMatchIndex: -1
-    property bool closeConfirmed: false
-    property url pendingOpenUrl
-    property string pendingAction: ""
     property bool replaceOpen: false
-    property bool awaitingPendingSave: false
     property bool keyboardWaitingForDialog: false
 
     Material.theme: darkMode ? Material.Dark : Material.Light
     Material.accent: backend.themeAccent
     color: pageColor
 
-    onClosing: function(close) {
-        if (closeConfirmed || !backend.modified)
-            return;
-
-        close.accepted = false;
-        pendingAction = "close";
-        if (!unsavedChangesDialog.opened)
-            unsavedChangesDialog.open();
-    }
+    onClosing: backend.saveBeforeLeaving()
+    onActiveChanged: if (!active) backend.saveNow()
 
     function setSidebarOpen(open) {
         sidebarOpen = open;
@@ -70,30 +59,14 @@ ApplicationWindow {
     }
 
     function requestOpen(url) {
-        if (!backend.modified) {
-            backend.open(url);
-            return;
-        }
-        pendingOpenUrl = url;
-        pendingAction = "open";
-        unsavedChangesDialog.open();
-    }
-
-    function completePendingAction() {
-        var action = pendingAction;
-        pendingAction = "";
-        if (action === "close") {
-            closeConfirmed = true;
-            close();
-        } else if (action === "open") {
-            backend.open(pendingOpenUrl);
-        }
+        backend.saveBeforeLeaving();
+        backend.open(url);
     }
 
     // A closing modal hands focus back to whatever held it before it opened,
     // so wait it out rather than race it.
     function handKeyboardToEditor() {
-        if (unsavedChangesDialog.visible || externalChangeDialog.visible) {
+        if (externalChangeDialog.visible) {
             keyboardWaitingForDialog = true;
             return;
         }
@@ -325,17 +298,6 @@ ApplicationWindow {
             saveFileDialog.open();
         }
 
-        function onCloseAfterSave() {
-            win.closeConfirmed = true;
-            win.close();
-        }
-
-        function onSaveSucceeded() {
-            win.awaitingPendingSave = false;
-            if (win.pendingAction !== "")
-                win.completePendingAction();
-        }
-
         function onDocumentLoaded() {
             editor.cursorPosition = editor.length;
             win.settlingCaret = true;
@@ -365,36 +327,7 @@ ApplicationWindow {
         fileMode: Dialogs.FileDialog.SaveFile
         nameFilters: ["Markdown files (*.md *.markdown)", "All files (*)"]
         onAccepted: backend.saveAs(selectedFile)
-        onRejected: {
-            backend.fileDialogCanceled();
-            win.awaitingPendingSave = false;
-            win.pendingAction = "";
-        }
-    }
-
-    UnsavedChangesDialog {
-        id: unsavedChangesDialog
-        objectName: "unsavedChangesDialog"
-        fileName: backend.fileName
-        darkMode: win.darkMode
-        textScale: win.textScale
-        textColor: win.textColor
-        strongTextColor: win.strongTextColor
-        activeButtonColor: backend.themeAccent
-        containerWidth: win.width
-        containerHeight: win.height
-
-        onDiscardRequested: {
-            backend.discardRecovery();
-            win.completePendingAction();
-        }
-
-        onSaveRequested: {
-            win.awaitingPendingSave = true;
-            backend.save();
-        }
-        onCancelRequested: win.pendingAction = ""
-        onClosed: win.releaseKeyboardAfterDialog()
+        onRejected: backend.fileDialogCanceled()
     }
 
     ExternalChangeDialog {

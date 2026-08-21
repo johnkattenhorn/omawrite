@@ -12,7 +12,8 @@ Install via the Omarchy Package Repository via the `omawrite` package. It's inst
 
 ## Shortcuts
 
-- `Ctrl+S` saves. Unsaved documents use the XDG desktop portal file picker.
+- `Ctrl+S` saves, though writing is saved for you anyway. Naming a document
+  yourself uses the XDG desktop portal file picker.
 - `Ctrl+Shift+S` saves as.
 - `Ctrl+O` opens a Markdown file through the portal picker.
 - `Ctrl+P` opens the system print dialog.
@@ -53,6 +54,17 @@ starts from the document being written.
 
 Drag its right edge to widen it; the width is remembered, and stops short of
 squeezing the writing column below its usual measure.
+
+## Saving
+
+Writing is saved a moment after you stop typing, and again whenever you leave
+the document — switching files, closing the window, or moving to another app.
+There is no prompt to answer and nothing to remember to press; `Ctrl+Z` is the
+way back rather than a discard button.
+
+A document you never named takes its name from its first line when you leave
+it, landing in the folder the sidebar is showing; if the same name is taken
+already it becomes `... 2`. One with nothing written in it is not kept.
 
 Unsaved drafts are recovered after an abnormal exit. Omawrite also watches open files
 and warns before an external change can replace local work.

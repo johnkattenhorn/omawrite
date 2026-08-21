@@ -588,24 +588,20 @@ private slots:
         QTRY_COMPARE(sidebar->property("selectedName").toString(),
                      QStringLiteral("one.md"));
 
-        // Unsaved work gets its prompt, and the keyboard still ends up in the
-        // document that opens once the prompt is out of the way.
+        // Unsaved work asks nothing: the document being left is written out
+        // on the way, and the keyboard lands in the one that opens.
         editor->setProperty("text", QStringLiteral("a draft"));
         QVERIFY(backend.modified());
         QVERIFY(QMetaObject::invokeMethod(sidebar, "selectNext"));
         QVERIFY(QMetaObject::invokeMethod(sidebar, "activateSelection"));
-        QCOMPARE(window->property("pendingAction").toString(), QStringLiteral("open"));
-        QVERIFY(!editor->property("activeFocus").toBool());
-
-        QObject *dialog = window->findChild<QObject *>(
-            QStringLiteral("unsavedChangesDialog"));
-        QVERIFY(dialog);
-        QVERIFY(QMetaObject::invokeMethod(dialog, "close"));
-        QVERIFY(QMetaObject::invokeMethod(dialog, "discardRequested"));
         QCOMPARE(backend.fileName(), QStringLiteral("two.md"));
-        // A handoff made while the dialog is still closing is undone.
-        QTRY_VERIFY(!dialog->property("visible").toBool());
         QVERIFY(editor->property("activeFocus").toBool());
+        QVERIFY(!backend.modified());
+
+        QFile left(folder.filePath(QStringLiteral("one.md")));
+        QVERIFY(left.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(left.readAll()), QStringLiteral("a draft"));
+        left.close();
 
         // A document that cannot be read is never opened, so the keyboard
         // stays with the browsing rather than following a document that
@@ -619,6 +615,113 @@ private slots:
         QCOMPARE(backend.fileName(), QStringLiteral("two.md"));
         QVERIFY(sidebar->property("listHasFocus").toBool());
         QVERIFY(!editor->property("activeFocus").toBool());
+    }
+
+    void autosavesOnceTheTypingStops() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("note.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly));
+        seed.close();
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+        editor->setProperty("text", QStringLiteral("written and left alone"));
+        QVERIFY(backend.modified());
+
+        // A pause in the writing is the save; nothing has to be pressed.
+        QTRY_VERIFY(!backend.modified());
+        QFile written(path);
+        QVERIFY(written.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(written.readAll()),
+                 QStringLiteral("written and left alone"));
+        written.close();
+
+        // Closing does not wait out the pause, and does not ask either.
+        editor->setProperty("text", QStringLiteral("one last thought"));
+        QVERIFY(backend.modified());
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "close"));
+        QVERIFY(!backend.modified());
+        QFile onClose(path);
+        QVERIFY(onClose.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(onClose.readAll()),
+                 QStringLiteral("one last thought"));
+    }
+
+    void namesAnUntitledDocumentFromItsFirstLine() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+
+        Backend backend;
+        backend.setFolder(QUrl::fromLocalFile(folder.path()));
+
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        // A document that was never named takes one from its first line when
+        // it is left, rather than stopping the writer to ask for it.
+        editor->setProperty("text", QStringLiteral("Field notes\n\nbody"));
+        QVERIFY(QMetaObject::invokeMethod(&backend, "saveBeforeLeaving"));
+        QCOMPARE(backend.fileName(), QStringLiteral("Field notes.md"));
+        QFile named(folder.filePath(QStringLiteral("Field notes.md")));
+        QVERIFY(named.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(named.readAll()),
+                 QStringLiteral("Field notes\n\nbody"));
+        named.close();
+
+        // The name gives way rather than the writing: a second note opening
+        // on the same line lands beside the first.
+        Backend second;
+        second.setFolder(QUrl::fromLocalFile(folder.path()));
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &second);
+        QScopedPointer<QObject> secondWindow(component.create());
+        QVERIFY2(secondWindow, qPrintable(component.errorString()));
+        QObject *secondEditor =
+            secondWindow->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(secondEditor);
+        secondEditor->setProperty("text", QStringLiteral("Field notes\n\nagain"));
+        QVERIFY(QMetaObject::invokeMethod(&second, "saveBeforeLeaving"));
+        QCOMPARE(second.fileName(), QStringLiteral("Field notes 2.md"));
+    }
+
+    void discardsAnEmptyUntitledDocument() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+
+        Backend backend;
+        backend.setFolder(QUrl::fromLocalFile(folder.path()));
+
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        // Nothing was written, so there is nothing to name and nothing to keep.
+        editor->setProperty("text", QStringLiteral("   \n\n  "));
+        QVERIFY(QMetaObject::invokeMethod(&backend, "saveBeforeLeaving"));
+        QVERIFY(!backend.modified());
+        QCOMPARE(QDir(folder.path())
+                     .entryList(QDir::Files | QDir::NoDotAndDotDot).size(), 0);
     }
 
     void keepsTheSidebarSelectionWhenTheFolderIsReRead() {

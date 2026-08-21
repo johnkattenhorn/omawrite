@@ -96,9 +96,9 @@ Backend::Backend(QObject *parent) : QObject(parent) {
     m_wordCountTimer.setSingleShot(true);
     m_wordCountTimer.setInterval(120);
     connect(&m_wordCountTimer, &QTimer::timeout, this, &Backend::refreshWordCount);
-    m_recoveryTimer.setSingleShot(true);
-    m_recoveryTimer.setInterval(750);
-    connect(&m_recoveryTimer, &QTimer::timeout, this, &Backend::writeRecovery);
+    m_persistTimer.setSingleShot(true);
+    m_persistTimer.setInterval(750);
+    connect(&m_persistTimer, &QTimer::timeout, this, &Backend::persistDocument);
     connect(&m_fileWatcher, &QFileSystemWatcher::fileChanged, this,
             [this](const QString &path) {
                 if (path != m_fileUrl.toLocalFile())
@@ -304,6 +304,30 @@ void Backend::save() {
     saveTo(m_fileUrl);
 }
 
+void Backend::saveNow() {
+    m_persistTimer.stop();
+    persistDocument();
+}
+
+void Backend::saveBeforeLeaving() {
+    m_persistTimer.stop();
+
+    if (m_fileUrl.isLocalFile()) {
+        if (m_modified)
+            saveTo(m_fileUrl);
+        return;
+    }
+
+    const QString text = currentDocumentText();
+    if (text.trimmed().isEmpty()) {
+        clearRecovery();
+        setModified(false);
+        return;
+    }
+
+    saveTo(unusedDocumentUrl(suggestedFileName(text)));
+}
+
 void Backend::saveForClose() {
     if (!m_modified) {
         emit closeAfterSave();
@@ -345,7 +369,7 @@ void Backend::keepExternalVersion() {
         m_hasKnownFileContents = false;
     }
     setModified(true);
-    scheduleRecovery();
+    schedulePersist();
     watchCurrentFile();
     setStatus(QStringLiteral("Kept your version"));
 }
@@ -429,8 +453,7 @@ bool Backend::editorTextChanged() {
 
     scheduleWordCount();
     setModified(true);
-    setStatus(QStringLiteral("Unsaved"));
-    scheduleRecovery();
+    schedulePersist();
     return true;
 }
 
@@ -589,8 +612,22 @@ void Backend::saveTo(const QUrl &url) {
         emit closeAfterSave();
 }
 
-void Backend::scheduleRecovery() {
-    m_recoveryTimer.start();
+void Backend::schedulePersist() {
+    m_persistTimer.start();
+}
+
+// A named document is written to its file; one that has never been named keeps
+// a recovery draft until it is left.
+void Backend::persistDocument() {
+    if (!m_modified)
+        return;
+
+    if (m_fileUrl.isLocalFile()) {
+        saveTo(m_fileUrl);
+        return;
+    }
+
+    writeRecovery();
 }
 
 QString Backend::recoveryPath() const {
@@ -637,7 +674,7 @@ void Backend::restoreRecovery() {
 }
 
 void Backend::clearRecovery() {
-    m_recoveryTimer.stop();
+    m_persistTimer.stop();
     QFile::remove(recoveryPath());
 }
 
@@ -787,6 +824,25 @@ void Backend::watchOmarchyTheme() {
         m_themeWatcher.addPath(themeDir);
     if (QFile::exists(colorsPath))
         m_themeWatcher.addPath(colorsPath);
+}
+
+// A save cannot report a clash the way creating a document does, so the name
+// gives way instead.
+QUrl Backend::unusedDocumentUrl(const QString &fileName) const {
+    const QDir directory(m_folderUrl.toLocalFile());
+    if (!QFileInfo::exists(directory.filePath(fileName)))
+        return QUrl::fromLocalFile(directory.filePath(fileName));
+
+    const QFileInfo info(fileName);
+    const QString base = info.completeBaseName();
+    const QString suffix = info.suffix().isEmpty() ? QString()
+                                                   : QLatin1Char('.') + info.suffix();
+    for (int n = 2; n < 1000; ++n) {
+        const QString candidate = QStringLiteral("%1 %2%3").arg(base).arg(n).arg(suffix);
+        if (!QFileInfo::exists(directory.filePath(candidate)))
+            return QUrl::fromLocalFile(directory.filePath(candidate));
+    }
+    return QUrl::fromLocalFile(directory.filePath(fileName));
 }
 
 QUrl Backend::suggestedSaveUrl() const {

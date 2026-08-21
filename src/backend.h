@@ -73,6 +73,8 @@ public:
     Q_INVOKABLE void saveSidebarWidth(int width);
     Q_INVOKABLE void open(const QUrl &url);
     Q_INVOKABLE void save();
+    Q_INVOKABLE void saveNow();
+    Q_INVOKABLE void saveBeforeLeaving();
     Q_INVOKABLE void saveForClose();
     Q_INVOKABLE void saveAsDialog();
     Q_INVOKABLE void saveAs(const QUrl &url);
@@ -123,8 +125,10 @@ private:
     void scheduleWordCount();
     void applyDocumentTypography();
     void reapplyTypographyToChange();
-    void scheduleRecovery();
+    void schedulePersist();
+    void persistDocument();
     void writeRecovery();
+    QUrl unusedDocumentUrl(const QString &fileName) const;
     void restoreRecovery();
     void clearRecovery();
     QString recoveryPath() const;
@@ -145,7 +149,7 @@ private:
     int m_lastChangePos = 0;
     int m_lastChangeAdded = 0;
     QTimer m_wordCountTimer;
-    QTimer m_recoveryTimer;
+    QTimer m_persistTimer;
     QFileSystemWatcher m_fileWatcher;
     QUrl m_folderUrl;
     QFileSystemWatcher m_folderWatcher;
