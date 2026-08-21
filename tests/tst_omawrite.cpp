@@ -1094,8 +1094,16 @@ private slots:
         QVERIFY2(!backend.saveBeforeClosing(),
                  "with nowhere to write, the work reached nowhere");
 
-        // The first close is refused rather than dropping the only copy; the
-        // second is taken as meaning it.
+        // The first close is refused rather than dropping the only copy.
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "close"));
+        QVERIFY(window->property("visible").toBool());
+        QVERIFY(window->property("closeAnyway").toBool());
+
+        // That override belongs only to the text from the refused attempt.
+        // Continuing to write revokes it, so a later close tries persistence
+        // again instead of silently discarding the newer text.
+        editor->setProperty("text", QStringLiteral("newer only copy"));
+        QVERIFY(!window->property("closeAnyway").toBool());
         QVERIFY(QMetaObject::invokeMethod(window.data(), "close"));
         QVERIFY(window->property("visible").toBool());
         QVERIFY(window->property("closeAnyway").toBool());

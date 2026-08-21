@@ -857,8 +857,13 @@ ApplicationWindow {
                     if (win.searchUpdating)
                         return;
                     var contentChanged = backend.editorTextChanged();
-                    if (contentChanged)
+                    if (contentChanged) {
+                        // A failed close only confirms discarding the text that
+                        // was on screen for that attempt. New writing must get
+                        // its own chance to be saved.
+                        win.closeAnyway = false;
                         win.settlingCaret = false;
+                    }
                     if (win.searchOpen && contentChanged)
                         win.updateSearch();
                 }
