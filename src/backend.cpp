@@ -276,9 +276,6 @@ void Backend::saveSidebarWidth(int width) {
 }
 
 void Backend::open(const QUrl &url) {
-    // Whatever was contested, this is a different document now.
-    m_externalChangePending = false;
-
     if (!url.isLocalFile()) {
         setStatus(QStringLiteral("Only local files can be opened."));
         return;
@@ -292,6 +289,9 @@ void Backend::open(const QUrl &url) {
     }
 
     const QByteArray contents = file.readAll();
+    // Only now, with the new text in hand: whatever was contested belonged to
+    // the document being replaced, and an open that failed replaces nothing.
+    m_externalChangePending = false;
     loadDocumentText(QString::fromUtf8(contents));
     clearRecovery();
     m_lastKnownFileContents = contents;
@@ -389,9 +389,17 @@ void Backend::discardRecovery() {
 }
 
 void Backend::reloadFromDisk() {
-    m_externalChangePending = false;
-    if (m_fileUrl.isLocalFile())
-        open(m_fileUrl);
+    if (!m_fileUrl.isLocalFile())
+        return;
+
+    open(m_fileUrl);
+
+    // A reload that did not happen has answered nothing, and the prompt that
+    // asked has already closed itself. Ask again rather than leave the guard
+    // standing with nothing able to clear it.
+    if (m_externalChangePending)
+        emit externalChangeDetected(!QFileInfo::exists(m_fileUrl.toLocalFile()),
+                                    m_modified);
 }
 
 void Backend::keepExternalVersion() {

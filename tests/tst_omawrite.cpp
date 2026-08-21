@@ -768,6 +768,9 @@ private slots:
         QObject *prompt = window->findChild<QObject *>(
             QStringLiteral("externalChangeDialog"));
         QVERIFY(prompt);
+        // Asserted as configuration rather than by pressing Escape: the window
+        // is never shown here, so a synthetic key never reaches the popup and
+        // the behavioural version of this passes whatever the policy says.
         QCOMPARE(prompt->property("closePolicy").toInt(), 0);  // Popup.NoAutoClose
 
         // A conflict is about one file. Opening another document ends it,
@@ -804,6 +807,74 @@ private slots:
         QFile kept(path);
         QVERIFY(kept.open(QIODevice::ReadOnly));
         QCOMPARE(QString::fromUtf8(kept.readAll()), QStringLiteral("my version"));
+    }
+
+    void keepsTheGuardWhenTheNextDocumentWillNotOpen() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("contested.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly));
+        seed.write("original");
+        seed.close();
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+        editor->setProperty("text", QStringLiteral("my version"));
+
+        QSignalSpy conflict(&backend, &Backend::externalChangeDetected);
+        QFile outside(path);
+        QVERIFY(outside.open(QIODevice::WriteOnly));
+        outside.write("their version");
+        outside.close();
+        QTRY_COMPARE(conflict.count(), 1);
+
+        // An open that fails replaces nothing, so the document still on screen
+        // is the contested one and its guard has to stand.
+        backend.open(QUrl::fromLocalFile(folder.filePath(QStringLiteral("missing.md"))));
+        backend.save();
+        QVERIFY(QMetaObject::invokeMethod(&backend, "saveNow"));
+        QFile after(path);
+        QVERIFY(after.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(after.readAll()), QStringLiteral("their version"));
+    }
+
+    void asksAgainWhenTheReloadItselfFails() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("vanishing.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly));
+        seed.write("original");
+        seed.close();
+
+        Backend backend;
+        backend.open(QUrl::fromLocalFile(path));
+
+        QSignalSpy conflict(&backend, &Backend::externalChangeDetected);
+        QSaveFile outside(path);
+        QVERIFY(outside.open(QIODevice::WriteOnly));
+        outside.write("theirs");
+        QVERIFY(outside.commit());
+        QTRY_COMPARE(conflict.count(), 1);
+
+        // Taking their version cannot be done if there is no longer a their
+        // version to take. That has answered nothing, and the prompt has
+        // already closed itself, so it is raised again rather than leaving the
+        // guard standing with nothing able to clear it.
+        QVERIFY(QFile::remove(path));
+        backend.reloadFromDisk();
+        QCOMPARE(conflict.count(), 2);
+        QCOMPARE(conflict.last().at(0).toBool(), true);  // reported as deleted
     }
 
     void asksAgainWhenTheFileIsReplacedTwice() {
