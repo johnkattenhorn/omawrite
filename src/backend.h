@@ -14,6 +14,7 @@
 
 class MarkdownHighlighter;
 class PreviewDocument;
+class QFont;
 class QTextDocument;
 class QWindow;
 class QLockFile;
@@ -64,6 +65,7 @@ public:
     static QString normalizedLinkUrl(const QString &clipboardText);
     static QString suggestedFileName(const QString &text);
     static QString sanitizedEntryName(const QString &text);
+    static QFont printFont(const QFont &editorFont, qreal screenDpi);
 
     Q_INVOKABLE void attachDocument(QObject *textDocument);
     Q_INVOKABLE void attachPreviewDocument(QObject *textDocument);
