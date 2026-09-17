@@ -20,7 +20,7 @@ public:
         int length;
     };
 
-    enum class InlineKind { Bold, Italic, Link, WikiLink };
+    enum class InlineKind { Bold, Italic, Strikethrough, Link, WikiLink };
 
     struct InlineMarkup {
         InlineKind kind;
@@ -62,6 +62,7 @@ private:
     QTextCharFormat m_headingFormat;
     QTextCharFormat m_boldFormat;
     QTextCharFormat m_italicFormat;
+    QTextCharFormat m_strikethroughFormat;
     QTextCharFormat m_codeFormat;
     QTextCharFormat m_quoteFormat;
     QTextCharFormat m_linkFormat;
