@@ -2471,10 +2471,18 @@ private slots:
         file.write("second");
         file.close();
 
+        // Marked, not announced: a change to a tab you are not looking at waits
+        // until you get there.
         QTRY_VERIFY(session.tab(fileTab).value(QStringLiteral("externalChanged")).toBool());
         QCOMPARE(externalChangeSpy.count(), 0);
+
+        // And when you do get there, with nothing of yours at stake, it is
+        // taken rather than asked about, and the mark comes off.
         QVERIFY(backend->selectBuffer(fileTab));
-        QTRY_COMPARE(externalChangeSpy.count(), 1);
+        QTRY_VERIFY(!session.tab(fileTab).value(QStringLiteral("externalChanged")).toBool());
+        QCOMPARE(session.tab(fileTab).value(QStringLiteral("text")).toString(),
+                 QStringLiteral("second"));
+        QCOMPARE(externalChangeSpy.count(), 0);
     }
 
     void windowManagerRestoresWritingWindows() {

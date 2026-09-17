@@ -914,6 +914,19 @@ QFont Backend::printFont(const QFont &editorFont, qreal screenDpi) {
 
 void Backend::reportExternalChange(bool deleted) {
     emit buffersChanged();
+
+    // The same rule the document's own watcher follows: with no local changes
+    // there is nothing to weigh the newer text against, so it is taken rather
+    // than asked about. Two paths reach here -- the window manager watching
+    // every tab's file, and the tab strip noticing a background change as you
+    // switch to it -- and both have to answer the same way, or the rule holds
+    // only for whichever watcher happened to fire first.
+    if (!deleted && !m_modified && m_fileUrl.isLocalFile()
+            && QFileInfo::exists(m_fileUrl.toLocalFile())) {
+        reloadSilently();
+        return;
+    }
+
     emit externalChangeDetected(deleted, m_modified);
 }
 
