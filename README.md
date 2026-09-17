@@ -72,7 +72,8 @@ window is closed while `--open` does not.
 - `Ctrl++` and `Ctrl+-` adjust the editor text size. `Ctrl+=` also increases it,
   and `Ctrl+0` resets it to the original size.
 - `Ctrl+Shift+T` toggles focus mode: typewriter scrolling and paragraph dimming.
-- `Ctrl+?` shows the keyboard shortcut reference.
+- `Ctrl+/` shows the keyboard shortcut reference. `Ctrl+?` does the same, for
+  anyone whose fingers already know it.
 
 ## Sidebar
 

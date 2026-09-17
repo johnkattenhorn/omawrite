@@ -3697,6 +3697,40 @@ private slots:
         QCOMPARE(stripColour, QColor(window->property("pageColor").toString()));
     }
 
+    void opensTheShortcutListFromEitherKey() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        // Ctrl+? is Ctrl+Shift+/ on most layouts, so the list also answers to
+        // the key you can reach with one hand.
+        QObject *shortcut = nullptr;
+        for (QObject *candidate : window->findChildren<QObject *>()) {
+            if (!candidate->inherits("QQuickShortcut"))
+                continue;
+            const QVariantList keys = candidate->property("sequences").toList();
+            QStringList spelled;
+            for (const QVariant &key : keys)
+                spelled << key.toString();
+            if (spelled.contains(QStringLiteral("Ctrl+/"))) {
+                shortcut = candidate;
+                QVERIFY2(spelled.contains(QStringLiteral("Ctrl+?")),
+                         "the old key still has to work");
+                break;
+            }
+        }
+        QVERIFY2(shortcut, "nothing is bound to Ctrl+/");
+    }
+
 private:
     // Points HOME at a scratch tree holding one colors.toml, and puts it back on the way out.
     struct ScopedTheme {

@@ -489,8 +489,11 @@ ApplicationWindow {
         onActivated: followLinkAt(editor.cursorPosition)
     }
 
+    // Ctrl+? is Ctrl+Shift+/ on most layouts, which is a lot of fingers for the
+    // key you reach for when you have forgotten the keys. Ctrl+/ is the
+    // conventional one and it was free, so both open the list.
     Shortcut {
-        sequence: "Ctrl+?"
+        sequences: ["Ctrl+/", "Ctrl+?"]
         context: Qt.ApplicationShortcut
         onActivated: shortcutsDialog.open()
     }
@@ -668,7 +671,7 @@ ApplicationWindow {
         x: Math.round((win.width - width) / 2)
         y: Math.round((win.height - height) / 2)
         contentItem: Label {
-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
+            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+/  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
             lineHeight: 1.5
         }
     }
