@@ -872,13 +872,15 @@ private slots:
         QCOMPARE(QString::fromUtf8(left.readAll()), QStringLiteral("a draft"));
         left.close();
 
-        // A document that cannot be read is never opened, so the keyboard
-        // stays with the browsing rather than following a document that
-        // never arrived.
+        // A document that cannot be opened is never opened, so the keyboard
+        // stays with the browsing rather than following a document that never
+        // arrived. A name that is merely absent is not that case any more: it
+        // is a file the writer means to start. A name under a folder that is
+        // not there is, because the first save would have nowhere to land.
         QVERIFY(QMetaObject::invokeMethod(window.data(), "setSidebarOpen",
                                           Q_ARG(QVariant, true)));
         const QUrl missing = QUrl::fromLocalFile(
-            folder.filePath(QStringLiteral("missing.md")));
+            folder.filePath(QStringLiteral("no-such-folder/missing.md")));
         QVERIFY(QMetaObject::invokeMethod(window.data(), "requestOpen",
                                           Q_ARG(QVariant, QVariant(missing))));
         QCOMPARE(backend.fileName(), QStringLiteral("two.md"));
@@ -2963,6 +2965,344 @@ private slots:
         QCOMPARE(Cli::handleArguments({QStringLiteral("omawrite")}), std::nullopt);
         QCOMPARE(Cli::handleArguments({QStringLiteral("omawrite"), QStringLiteral("draft.md")}),
                  std::nullopt);
+    }
+
+    void startsANewFileFromAPathThatIsNotThereYet() {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString newPath = directory.filePath(QStringLiteral("new_document.md"));
+        const QString existingPath = directory.filePath(QStringLiteral("already-there.md"));
+        QFile existing(existingPath);
+        QVERIFY(existing.open(QIODevice::WriteOnly | QIODevice::Text));
+        existing.write("on disk already");
+        existing.close();
+
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        // A name from the command line that is not on disk yet is still this
+        // document's name, blank as the document is.
+        QSignalSpy saveDialogSpy(&backend, &Backend::saveDialogRequested);
+        backend.open(QUrl::fromLocalFile(newPath));
+        QCOMPARE(backend.fileUrl(), QUrl::fromLocalFile(newPath));
+        QCOMPARE(backend.fileName(), QStringLiteral("new_document.md"));
+        QCOMPARE(backend.status(), QStringLiteral("New file new_document.md"));
+        QCOMPARE(editor->property("text").toString(), QString());
+        QVERIFY(!backend.modified());
+
+        // Opening it wrote nothing: the file appears when the writer saves.
+        QVERIFY(!QFileInfo::exists(newPath));
+
+        editor->setProperty("text", QStringLiteral("first words"));
+        QVERIFY(backend.modified());
+        backend.save();
+        QCOMPARE(saveDialogSpy.count(), 0);
+        QVERIFY(!backend.modified());
+
+        QFile written(newPath);
+        QVERIFY(written.open(QIODevice::ReadOnly | QIODevice::Text));
+        QCOMPARE(written.readAll(), QByteArray("first words"));
+        written.close();
+
+        // A file that is there still opens and reads.
+        backend.open(QUrl::fromLocalFile(existingPath));
+        QCOMPARE(backend.fileName(), QStringLiteral("already-there.md"));
+        QCOMPARE(editor->property("text").toString(), QStringLiteral("on disk already"));
+
+        // A path that is there but cannot be read is still an error, and
+        // leaves the document it could not replace alone.
+        backend.open(QUrl::fromLocalFile(directory.path()));
+        QCOMPARE(backend.status(),
+                 QStringLiteral("Could not open %1.")
+                     .arg(QFileInfo(directory.path()).fileName()));
+        QCOMPARE(backend.fileUrl(), QUrl::fromLocalFile(existingPath));
+        QCOMPARE(editor->property("text").toString(), QStringLiteral("on disk already"));
+
+        // A name under a directory that is not there is not a file anyone can
+        // start, so it stays an error rather than a document that cannot save.
+        backend.open(QUrl::fromLocalFile(
+            directory.filePath(QStringLiteral("not-there/child.md"))));
+        QCOMPARE(backend.status(), QStringLiteral("Could not open child.md."));
+        QCOMPARE(backend.fileUrl(), QUrl::fromLocalFile(existingPath));
+        QCOMPARE(editor->property("text").toString(), QStringLiteral("on disk already"));
+    }
+
+    void asksBeforeAFirstSaveReplacesAFileThatAppeared() {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString path = directory.filePath(QStringLiteral("arriving.md"));
+
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+        QCOMPARE(backend.status(), QStringLiteral("New file arriving.md"));
+        editor->setProperty("text", QStringLiteral("my draft"));
+        QVERIFY(backend.modified());
+
+        // A file that is not there cannot be watched, so nothing tells us when
+        // a `git pull` or a sync client puts one on that path. The first save
+        // is the first look, and it must not replace a file it has never read.
+        QFile arrived(path);
+        QVERIFY(arrived.open(QIODevice::WriteOnly | QIODevice::Text));
+        arrived.write("arrived from elsewhere");
+        arrived.close();
+
+        QSignalSpy appearedSpy(&backend, &Backend::externalFileAppeared);
+        QSignalSpy saveDialogSpy(&backend, &Backend::saveDialogRequested);
+        backend.save();
+        QCOMPARE(appearedSpy.count(), 1);
+        QCOMPARE(appearedSpy.takeFirst().constFirst().toBool(), true);
+
+        // Asked, not answered: the file on disk is whole and the draft is
+        // still unsaved. The name is not in question, so no Save As dialog.
+        QCOMPARE(saveDialogSpy.count(), 0);
+        QVERIFY(backend.modified());
+        QFile untouched(path);
+        QVERIFY(untouched.open(QIODevice::ReadOnly | QIODevice::Text));
+        QCOMPARE(untouched.readAll(), QByteArray("arrived from elsewhere"));
+        untouched.close();
+
+        // Keeping your version is what the dialog offers, and the save that
+        // follows it goes through: the guard asks once, it does not lock the
+        // writer out of the name they gave.
+        backend.keepExternalVersion();
+        backend.save();
+        QVERIFY(!backend.modified());
+        QFile written(path);
+        QVERIFY(written.open(QIODevice::ReadOnly | QIODevice::Text));
+        QCOMPARE(written.readAll(), QByteArray("my draft"));
+        written.close();
+    }
+
+    void asksOnlyOnceWhenWhatAppearedCannotBeRead() {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString path = directory.filePath(QStringLiteral("blocked.md"));
+
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+        editor->setProperty("text", QStringLiteral("my draft"));
+        QVERIFY(backend.modified());
+
+        // What turns up on the path need not be a readable file. A directory
+        // is the plainest case: keepExternalVersion() cannot read it, so it
+        // has no contents to remember afterwards.
+        QVERIFY(QDir().mkpath(path));
+
+        QSignalSpy appearedSpy(&backend, &Backend::externalFileAppeared);
+        backend.save();
+        QCOMPARE(appearedSpy.count(), 1);
+
+        // Keeping your version answers the question, and an answer that could
+        // not be read is still an answer. Asking again would put the writer in
+        // a dialog with no way out of it, every Ctrl+S for the rest of the
+        // session. The second save goes to the filesystem and reports what the
+        // filesystem says, which is the only thing that can end this.
+        backend.keepExternalVersion();
+        QCOMPARE(backend.status(), QStringLiteral("Kept your version"));
+        backend.save();
+        QCOMPARE(appearedSpy.count(), 1);
+        QCOMPARE(backend.status(), QStringLiteral("Could not save blocked.md."));
+    }
+
+    // Dropped from omacom/omawrite#13: the unsaved-changes dialog it drives was removed with #22, and autosave
+    // answers the question it used to ask.
+
+
+    void putsKeepMineForwardWhenAFileAppeared() {
+        const QString dialogPath = QFINDTESTDATA("../src/ExternalChangeDialog.qml");
+        QVERIFY(!dialogPath.isEmpty());
+
+        QQmlEngine engine;
+        QQmlComponent component(&engine, QUrl::fromLocalFile(dialogPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> dialog(component.create());
+        QVERIFY2(dialog, qPrintable(component.errorString()));
+
+        QObject *keep = dialog->findChild<QObject *>(QStringLiteral("keepMineButton"));
+        QObject *reload = dialog->findChild<QObject *>(QStringLiteral("reloadButton"));
+        QObject *message = dialog->findChild<QObject *>(QStringLiteral("externalChangeMessage"));
+        QObject *heading = dialog->findChild<QObject *>(QStringLiteral("externalChangeHeading"));
+        QVERIFY(keep);
+        QVERIFY(reload);
+        QVERIFY(message);
+        QVERIFY(heading);
+
+        // For an ordinary outside edit the file on disk is a second copy of
+        // the work, so Reload is the safe answer and leads, as it always has.
+        QVERIFY(!dialog->property("keepIsSafer").toBool());
+        QVERIFY(reload->property("primary").toBool());
+        QVERIFY(!keep->property("primary").toBool());
+
+        // For a file that appeared there is no second copy: every word the
+        // writer has is in the editor, and reloading throws all of it away,
+        // recovery snapshot included. The button that does that must not be
+        // the one Enter presses, and the text must say what is at stake.
+        dialog->setProperty("appeared", true);
+        QVERIFY(dialog->property("keepIsSafer").toBool());
+        QVERIFY(keep->property("primary").toBool());
+        QVERIFY(!reload->property("primary").toBool());
+        QCOMPARE(heading->property("text").toString(), QStringLiteral("File appeared"));
+        const QString message_ = message->property("text").toString();
+        QVERIFY2(message_.contains(QStringLiteral("created this file")), qPrintable(message_));
+        QVERIFY2(message_.contains(QStringLiteral("discard everything")), qPrintable(message_));
+    }
+
+    // Dropped from omacom/omawrite#13: autosave writes the file back within the second, so the window this race
+    // needed -- a deleted path staying deleted until the next manual save -- is
+    // one autosave closes.
+
+
+    void writesTheNeverReadPathIntoTheSnapshot() {
+        QTemporaryDir homeDirectory;
+        QVERIFY(homeDirectory.isValid());
+        const QByteArray originalHome = qgetenv("HOME");
+        struct HomeRestorer {
+            QByteArray value;
+            ~HomeRestorer() { qputenv("HOME", value); }
+        } restoreHome{originalHome};
+        QVERIFY(qputenv("HOME", homeDirectory.path().toUtf8()));
+
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString path = directory.filePath(QStringLiteral("fresh.md"));
+
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+
+        // Autosave writes the file itself, so a name that can be written never
+        // reaches a draft at all. Take the folder away once the name is taken,
+        // and the autosave falls back to the draft this test is about.
+        QVERIFY(QFile::setPermissions(directory.path(), QFileDevice::ReadOwner
+                                                        | QFileDevice::ExeOwner));
+        editor->setProperty("text", QStringLiteral("words only I have"));
+        QVERIFY(backend.modified());
+
+        // The snapshot the next run reads is the one this run wrote, so the
+        // flag has to survive the write as well as the read. Hand-writing the
+        // JSON proves only half of that, and it is the half that cannot lose
+        // a file.
+        const QString snapshotPath =
+            QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+                .filePath(QStringLiteral("recovery-0.json"));
+        QTRY_VERIFY(QFile::exists(snapshotPath));
+        QVERIFY(QFile::setPermissions(directory.path(), QFileDevice::ReadOwner
+                                                        | QFileDevice::WriteOwner
+                                                        | QFileDevice::ExeOwner));
+
+        QFile snapshot(snapshotPath);
+        QVERIFY(snapshot.open(QIODevice::ReadOnly));
+        const QJsonObject recovery = QJsonDocument::fromJson(snapshot.readAll()).object();
+        snapshot.close();
+        QVERIFY(recovery.contains(QStringLiteral("pathNeverRead")));
+        QVERIFY(recovery.value(QStringLiteral("pathNeverRead")).toBool());
+    }
+
+    void remembersANeverReadPathAcrossRecovery() {
+        QTemporaryDir homeDirectory;
+        QVERIFY(homeDirectory.isValid());
+        const QByteArray originalHome = qgetenv("HOME");
+        struct HomeRestorer {
+            QByteArray value;
+            ~HomeRestorer() { qputenv("HOME", value); }
+        } restoreHome{originalHome};
+        QVERIFY(qputenv("HOME", homeDirectory.path().toUtf8()));
+
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString path = directory.filePath(QStringLiteral("fresh.md"));
+
+        // The snapshot a crash leaves behind, for a new file whose first save
+        // never happened.
+        const QString stateDirectory =
+            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QVERIFY(QDir().mkpath(stateDirectory));
+        QFile snapshot(QDir(stateDirectory).filePath(QStringLiteral("recovery-0.json")));
+        QVERIFY(snapshot.open(QIODevice::WriteOnly));
+        const QJsonObject recovery{
+            {QStringLiteral("fileUrl"), QUrl::fromLocalFile(path).toString()},
+            {QStringLiteral("pathNeverRead"), true},
+            {QStringLiteral("text"), QStringLiteral("words only I have")}};
+        snapshot.write(QJsonDocument(recovery).toJson(QJsonDocument::Compact));
+        snapshot.close();
+
+        // A file turns up on the path while Omawrite is not running to see it.
+        QFile arrived(path);
+        QVERIFY(arrived.open(QIODevice::WriteOnly | QIODevice::Text));
+        arrived.write("arrived while we were down");
+        arrived.close();
+
+        // Reading it back on restore says what is on the path now, which is
+        // not the same as this document having read it. Without the flag the
+        // first save takes the guard's silence for permission.
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QCOMPARE(backend.status(), QStringLiteral("Recovered unsaved changes"));
+        QSignalSpy appearedSpy(&backend, &Backend::externalFileAppeared);
+        backend.save();
+        QCOMPARE(appearedSpy.count(), 1);
+        QFile untouched(path);
+        QVERIFY(untouched.open(QIODevice::ReadOnly | QIODevice::Text));
+        QCOMPARE(untouched.readAll(), QByteArray("arrived while we were down"));
+        untouched.close();
     }
 
 private:

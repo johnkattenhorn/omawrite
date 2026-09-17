@@ -172,8 +172,11 @@ signals:
     void windowEmptied();
     void focusModeChanged();
 
+    void externalFileAppeared(bool locallyModified);
+
 private:
     void initializeRuntime();
+    void openPath(const QUrl &url, bool mayStartNewFile);
     void loadDocumentText(const QString &text);
     void loadActiveBuffer();
     void persistActiveBuffer();
@@ -242,6 +245,12 @@ private:
     bool m_applicationClosing = false;
     bool m_restoringActiveBuffer = false;
     bool m_ignoringInitialCursorReset = false;
+    // Set where this document takes a name without having read what is on it,
+    // and cleared the moment anything settles the question -- a read, a write,
+    // or the writer answering the dialog. It is not the same question as
+    // m_hasKnownFileContents, which asks whether we hold a copy to compare
+    // against; a path we have never looked at is one nothing can watch.
+    bool m_pathNeverRead = false;
     QString m_recoveryPath;
     std::unique_ptr<QLockFile> m_recoveryLock;
     bool m_focusMode = false;
