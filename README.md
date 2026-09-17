@@ -2,6 +2,19 @@
 
 A dead-simple Markdown writing app built with Qt Quick and C++ that automatically follows system dark/light mode.
 
+> **This is a fork.** [omacom/omawrite](https://github.com/omacom/omawrite) is
+> deliberately minimal and stays that way on purpose. This branch takes 21 of
+> its open pull requests and adds two things nobody had built, so it has tabs, a
+> file sidebar, a preview that renders local images, wikilinks, checkboxes,
+> focus mode, image paste, and a command line that reaches the running window
+> over D-Bus.
+>
+> 102 commits, 108 tests. Merging those pull requests meant reconciling
+> contributors' designs rather than resolving conflict markers, and
+> [`docs/DECISIONS.md`](docs/DECISIONS.md) records the calls that are not
+> obvious from the diff. [`docs/STATUS.md`](docs/STATUS.md) says what was taken,
+> what was left, and why.
+
 <img width="2948" height="3227" alt="screenshot-2026-06-23_15-24-08" src="https://github.com/user-attachments/assets/4e930c0d-edda-4046-b444-a59eff523329" />
 <img width="2948" height="3227" alt="screenshot-2026-06-23_15-23-23" src="https://github.com/user-attachments/assets/8ced7c26-961b-4ded-b263-84403001a951" />
 
