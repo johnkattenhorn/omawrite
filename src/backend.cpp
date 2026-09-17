@@ -298,7 +298,7 @@ void Backend::initializeRuntime() {
                     return;
                 }
 
-                m_externalChangePending = true;
+                setExternalChangePending(true);
                 emit externalChangeDetected(deleted, m_modified);
                 // A replacement leaves the old inode behind, and the path with
                 // it, so re-arm or a second change would never be noticed.
@@ -645,7 +645,7 @@ void Backend::openPath(const QUrl &url, bool mayStartNewFile) {
     const QByteArray contents = file.readAll();
     // Only now, with the new text in hand: whatever was contested belonged to
     // the document being replaced, and an open that failed replaces nothing.
-    m_externalChangePending = false;
+    setExternalChangePending(false);
     persistActiveBuffer();
 
     // Opening takes over the tab that is showing rather than adding one. The
@@ -698,6 +698,22 @@ void Backend::save() {
         m_closeAfterSave = false;
         emit externalFileAppeared(m_modified);
         return;
+    }
+
+    // A dismissal left the question open, and an explicit save is the writer
+    // answering it. With the file gone there is no other version to weigh
+    // against, so the save writes it back; with one on disk the prompt comes
+    // again rather than overwriting it unasked. Autosave never reaches here,
+    // so neither happens behind the writer's back.
+    if (m_externalChangeDismissed) {
+        if (m_fileUrl.isLocalFile() && !QFileInfo::exists(m_fileUrl.toLocalFile())) {
+            setExternalChangePending(false);
+            if (m_workspaceSession)
+                m_workspaceSession->setExternalChange(activeBufferId(), false);
+        } else {
+            emit externalChangeDetected(false, m_modified);
+            return;
+        }
     }
 
     saveTo(m_fileUrl);
@@ -795,7 +811,7 @@ void Backend::reloadSilently() {
 
     m_lastKnownFileContents = contents;
     m_hasKnownFileContents = true;
-    m_externalChangePending = false;
+    setExternalChangePending(false);
 
     if (m_workspaceSession) {
         m_workspaceSession->updateTab(m_workspaceWindowId, activeBufferId(), m_fileUrl,
@@ -844,7 +860,7 @@ void Backend::reloadFromDisk() {
         // through to the question below rather than returning on the spot.
         if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
             const QByteArray contents = file.readAll();
-            m_externalChangePending = false;
+            setExternalChangePending(false);
             m_bufferSession.updateBuffer(m_bufferSession.activeBufferId(), m_fileUrl.toString(),
                                          QString::fromUtf8(contents), 0, 0, 0, false);
             m_bufferSession.saveNow();
@@ -878,7 +894,7 @@ void Backend::reloadFromDisk() {
 }
 
 void Backend::keepExternalVersion() {
-    m_externalChangePending = false;
+    setExternalChangePending(false);
     QFile file(m_fileUrl.toLocalFile());
     if (file.open(QIODevice::ReadOnly)) {
         m_lastKnownFileContents = file.readAll();
@@ -898,6 +914,24 @@ void Backend::keepExternalVersion() {
     schedulePersist();
     watchCurrentFile();
     setStatus(QStringLiteral("Kept your version"));
+}
+
+// Escape, or a click outside: the way a popup is dismissed everywhere else in
+// Omarchy. It answers nothing, so the guard stays up — the file is not written
+// over, the text keeps going to the recovery draft, and the tab keeps the dot
+// that says the question is open. For a file that was removed that is the
+// whole answer: the removal stands and the writing carries on.
+void Backend::dismissExternalChange() {
+    if (!m_externalChangePending)
+        return;
+
+    m_externalChangeDismissed = true;
+    const bool deleted = m_fileUrl.isLocalFile()
+        && !QFileInfo::exists(m_fileUrl.toLocalFile());
+    setStatus(deleted
+                  ? QStringLiteral("Left %1 deleted; Ctrl+S writes it again")
+                        .arg(fileName())
+                  : QStringLiteral("Left %1 alone; Ctrl+S asks again").arg(fileName()));
 }
 
 QFont Backend::printFont(const QFont &editorFont, qreal screenDpi) {
@@ -1555,6 +1589,11 @@ void Backend::setModified(bool modified) {
 
     m_modified = modified;
     emit modifiedChanged();
+}
+
+void Backend::setExternalChangePending(bool pending) {
+    m_externalChangePending = pending;
+    m_externalChangeDismissed = false;
 }
 
 void Backend::setStatus(const QString &status) {

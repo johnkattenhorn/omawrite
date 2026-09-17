@@ -135,6 +135,7 @@ public:
     Q_INVOKABLE void discardRecovery();
     Q_INVOKABLE void reloadFromDisk();
     Q_INVOKABLE void keepExternalVersion();
+    Q_INVOKABLE void dismissExternalChange();
     Q_INVOKABLE void resetEditorFontSize();
     Q_INVOKABLE void printDocument();
     Q_INVOKABLE void newWindow();
@@ -198,6 +199,7 @@ private:
     void setFileUrl(const QUrl &url);
     void setModified(bool modified);
     void setStatus(const QString &status);
+    void setExternalChangePending(bool pending);
     bool saveTo(const QUrl &url);
     QUrl suggestedSaveUrl() const;
     QDir defaultDirectory() const;
@@ -258,6 +260,9 @@ private:
     QByteArray m_lastKnownFileContents;
     bool m_hasKnownFileContents = false;
     bool m_externalChangePending = false;
+    // The prompt was dismissed rather than answered, so the question is still
+    // open and the file is still not ours to write.
+    bool m_externalChangeDismissed = false;
     bool m_applicationClosing = false;
     bool m_restoringActiveBuffer = false;
     bool m_ignoringInitialCursorReset = false;

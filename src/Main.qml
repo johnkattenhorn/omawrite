@@ -717,6 +717,7 @@ ApplicationWindow {
 
         onKeepRequested: backend.keepExternalVersion()
         onReloadRequested: backend.reloadFromDisk()
+        onDismissRequested: backend.dismissExternalChange()
         onClosed: win.releaseKeyboardAfterDialog()
     }
 

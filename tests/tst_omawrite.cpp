@@ -1217,16 +1217,17 @@ private slots:
         backend.saveAs(QUrl::fromLocalFile(copy));
         QVERIFY(QFileInfo::exists(copy));
 
-        // The prompt is the only way out, so it cannot be dismissed. Escape
-        // would have to mean keep, or reload, or neither, and each of those
-        // answers the question on the writer's behalf.
+        // Escape and a click outside dismiss it, the way they dismiss a popup
+        // anywhere else in Omarchy. Dismissing answers nothing: the guard
+        // stays up, so neither copy is touched by it.
         QObject *prompt = window->findChild<QObject *>(
             QStringLiteral("externalChangeDialog"));
         QVERIFY(prompt);
         // Asserted as configuration rather than by pressing Escape: the window
         // is never shown here, so a synthetic key never reaches the popup and
         // the behavioural version of this passes whatever the policy says.
-        QCOMPARE(prompt->property("closePolicy").toInt(), 0);  // Popup.NoAutoClose
+        QCOMPARE(prompt->property("closePolicy").toInt(),
+                 0x10 | 0x01);  // Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         // A conflict is about one file. Opening another document ends it,
         // rather than following the writer and refusing to save that one too.
@@ -1262,6 +1263,109 @@ private slots:
         QFile kept(path);
         QVERIFY(kept.open(QIODevice::ReadOnly));
         QCOMPARE(QString::fromUtf8(kept.readAll()), QStringLiteral("my version"));
+    }
+
+    void escapeLeavesARemovedFileRemoved() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("removed.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly));
+        seed.write("on disk");
+        seed.close();
+
+        Backend backend;
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> created(createMainWindow(engine, component, backend));
+        QVERIFY2(created, qPrintable(component.errorString()));
+        QQuickWindow *window = qobject_cast<QQuickWindow *>(created.data());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+        backend.open(QUrl::fromLocalFile(path));
+        editor->setProperty("text", QStringLiteral("my version"));
+
+        QSignalSpy conflict(&backend, &Backend::externalChangeDetected);
+        QVERIFY(QFile::remove(path));
+        QTRY_COMPARE(conflict.count(), 1);
+
+        QObject *prompt = window->findChild<QObject *>(
+            QStringLiteral("externalChangeDialog"));
+        QVERIFY(prompt);
+        QTRY_VERIFY(prompt->property("visible").toBool());
+
+        // Escape is how a popup is dismissed everywhere else in Omarchy, and
+        // here it answers nothing: the removal stands and the writing carries
+        // on. Autosave still has nothing it may write to that path, so the
+        // file the writer deleted does not come back behind them.
+        QTest::keyClick(window, Qt::Key_Escape);
+        QTRY_VERIFY(!prompt->property("visible").toBool());
+        QCOMPARE(backend.status(),
+                 QStringLiteral("Left removed.md deleted; Ctrl+S writes it again"));
+        QVERIFY(QMetaObject::invokeMethod(&backend, "saveNow"));
+        QVERIFY(!QFileInfo::exists(path));
+        QVERIFY(backend.modified());
+
+        // Ctrl+S is the writer asking for it back, which is an answer, so the
+        // file is written where it was.
+        backend.save();
+        QVERIFY(QFileInfo::exists(path));
+        QFile written(path);
+        QVERIFY(written.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(written.readAll()), QStringLiteral("my version"));
+        written.close();
+        QVERIFY(!backend.modified());
+    }
+
+    void escapeOnAChangedFileAsksAgainAtTheNextSave() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("contested.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly));
+        seed.write("original");
+        seed.close();
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+        editor->setProperty("text", QStringLiteral("my version"));
+
+        QSignalSpy conflict(&backend, &Backend::externalChangeDetected);
+        QFile outside(path);
+        QVERIFY(outside.open(QIODevice::WriteOnly));
+        outside.write("their version");
+        outside.close();
+        QTRY_COMPARE(conflict.count(), 1);
+
+        // With a copy of the work on disk, dismissing cannot mean take mine:
+        // it leaves both where they are.
+        backend.dismissExternalChange();
+        QCOMPARE(backend.status(), QStringLiteral("Left contested.md alone; Ctrl+S asks again"));
+        QVERIFY(QMetaObject::invokeMethod(&backend, "saveNow"));
+        QFile theirs(path);
+        QVERIFY(theirs.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(theirs.readAll()), QStringLiteral("their version"));
+        theirs.close();
+
+        // And the save that would overwrite it puts the question back rather
+        // than answering it by writing.
+        backend.save();
+        QCOMPARE(conflict.count(), 2);
+        QFile untouched(path);
+        QVERIFY(untouched.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(untouched.readAll()), QStringLiteral("their version"));
     }
 
     void keepsTheGuardWhenTheNextDocumentWillNotOpen() {

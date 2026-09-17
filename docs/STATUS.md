@@ -11,12 +11,12 @@ drive.
 ## Where it is
 
 Branch `custom`, 105 commits ahead of `origin/master` (upstream `8f98892`).
-112 tests pass. Clean build, no warnings. Pushed to
+114 tests pass. Clean build, no warnings. Pushed to
 [johnkattenhorn/omawrite](https://github.com/johnkattenhorn/omawrite).
 
 ```sh
 ./bin/build    # build/omawrite
-./bin/test     # 112 passing
+./bin/test     # 114 passing
 ```
 
 ## What is in it
@@ -55,6 +55,9 @@ Written here:
   something: blank lines, list items, quotes, tables, headings, fences,
   indented code, front matter, and the two-space hard break. Selection first,
   whole document when there is none.
+- **Escape dismisses the external-change prompt** — it answers nothing, so a
+  file removed outside Omawrite stays removed and the writing carries on. An
+  explicit `Ctrl+S` is what answers it.
 - **Preview scroll sync** — the toggle used to drop the reader at the top.
 - **Link hover** — reworked from #8 onto #40's existing hover, rather than
   adding a third MouseArea over the editor.

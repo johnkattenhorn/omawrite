@@ -21,19 +21,26 @@ Dialog {
 
     signal keepRequested()
     signal reloadRequested()
+    // Escape, or a click outside the card: what dismissing a popup means
+    // everywhere else in Omarchy, and here it means neither answer. Both
+    // copies are left where they are, which for a file that was removed is
+    // the answer the removal already gave.
+    signal dismissRequested()
+
+    // Set by the buttons on their way out, so closing tells the two apart.
+    property bool answered: false
 
     modal: true
     focus: true
-    // Both ways out are answers. Escape would be a third, and every meaning it
-    // could be given — keep, reload, or neither — decides the thing being
-    // asked, so it is not offered.
-    closePolicy: Popup.NoAutoClose
+    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     width: Math.min(520, containerWidth - 48)
     x: Math.round((containerWidth - width) / 2)
     y: Math.round((containerHeight - height) / 2)
     padding: 20
 
+    onAboutToShow: answered = false
     onOpened: (keepIsSafer ? keepButton : reloadButton).forceActiveFocus()
+    onClosed: if (!answered) dismissRequested()
 
     background: Rectangle {
         color: root.darkMode ? "#1a1a1a" : "#ffffff"
@@ -59,11 +66,11 @@ Dialog {
             objectName: "externalChangeMessage"
             width: parent.width
             text: root.deleted
-                ? "This file was removed outside Omawrite. Keep your text as an unsaved document?"
+                ? "This file was removed outside Omawrite. Keep your text as an unsaved document? Escape leaves it removed and carries on."
                 : (root.appeared
                    ? "Something else created this file after Omawrite took the name. None of your text has been written yet, so reloading will discard everything you have typed."
                    : (root.locallyModified
-                      ? "This file changed outside Omawrite. Reloading will discard your changes."
+                      ? "This file changed outside Omawrite. Reloading will discard your changes. Escape leaves both alone."
                       : "This file changed outside Omawrite."))
             color: root.textColor
             wrapMode: Text.Wrap
@@ -96,6 +103,7 @@ Dialog {
                 KeyNavigation.tab: reloadButton
                 KeyNavigation.backtab: reloadButton
                 onClicked: {
+                    root.answered = true;
                     root.close();
                     root.keepRequested();
                 }
@@ -115,6 +123,7 @@ Dialog {
                 KeyNavigation.tab: keepButton
                 KeyNavigation.backtab: keepButton
                 onClicked: {
+                    root.answered = true;
                     root.close();
                     root.reloadRequested();
                 }

@@ -2,6 +2,28 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-17 — Escape dismisses the external-change prompt, and answers nothing
+
+The prompt used to refuse Escape: `closePolicy: Popup.NoAutoClose`, on the
+grounds that keep, reload and neither are all answers and Escape cannot pick
+one. A removed file showed what that costs. `Reload` is disabled when the file
+is gone, so `Keep Mine` was the only control on a modal dialog, and the only
+way out of the window was to kill the process — for a writer whose answer was
+"the deletion was deliberate, carry on".
+
+Escape and a click outside now dismiss it, which is what dismissing a popup
+means everywhere else in Omarchy (`Ui/ConfirmDialog.qml` answers Escape and a
+scrim click with `canceled()`).
+
+Dismissing answers nothing, and the machinery for an unanswered question was
+already there: `m_externalChangePending` stays up, so `saveTo()` refuses the
+contested path, autosave falls back to the recovery draft, and the tab keeps
+its dot. A removed file therefore stays removed. What is new is
+`m_externalChangeDismissed`, which only an explicit `Ctrl+S` reads: with the
+file gone there is no second version to weigh, so the save writes it back, and
+with one on disk the prompt comes again rather than overwriting it unasked.
+Autosave never takes that path, so neither happens behind the writer.
+
 ## 2026-09-17 — Copy on select watches the pointer, not the selection
 
 Copying when `selectedText` changes would copy while a Shift+arrow selection is
