@@ -31,6 +31,8 @@ Install via the Omarchy Package Repository via the `omawrite` package. It's inst
 - `Tab` and `Shift+Tab` nest and unnest list items. Bullets and numbers line up under
   the item above them, and ordered lists renumber themselves.
 - `Ctrl+Click` or `Ctrl+Enter` follows a link: Obsidian `[[wikilinks]]` open the note in Omawrite, `https://` and markdown `[text](url)` links open in the browser.
+- `Ctrl+V` pastes an image from the clipboard: it is written to an `images` folder
+  beside the document and referred to by a relative path, which the preview renders.
 - `Ctrl+?` shows the keyboard shortcut reference.
 
 ## Sidebar

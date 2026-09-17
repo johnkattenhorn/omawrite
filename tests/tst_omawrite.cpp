@@ -1,7 +1,11 @@
 #include <QtTest>
+#include <QClipboard>
 #include <QColor>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QQuickTextDocument>
+#include <QTextBlock>
+#include <QTextDocument>
 #include <QQuickItem>
 #include <QFont>
 #include <QQmlComponent>
@@ -2011,6 +2015,122 @@ private slots:
         backspaceKey();
         QCOMPARE(text(), QStringLiteral("one\n  two"));
         QCOMPARE(caret(), 6);
+    }
+
+    void writesAPastedImageBesideTheDocument() {
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        QVERIFY(clipboard);
+
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("notes.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly | QIODevice::Text));
+        seed.write("# Notes\n");
+        seed.close();
+
+        QImage pasted(4, 3, QImage::Format_RGB32);
+        pasted.fill(Qt::red);
+        clipboard->setImage(pasted);
+
+        Backend backend;
+        backend.open(QUrl::fromLocalFile(path));
+
+        const QString reference = backend.saveClipboardImage();
+        QCOMPARE(reference, QStringLiteral("images/") + QFileInfo(reference).fileName());
+
+        // The reference is relative to the document, so it resolves beside it
+        // and stays inside the folder the preview is allowed to read.
+        const QString written = folder.filePath(reference);
+        QVERIFY(QFileInfo::exists(written));
+        QCOMPARE(QImage(written).size(), pasted.size());
+
+        // A second paste in the same second takes a name of its own rather than
+        // writing over the first.
+        const QString second = backend.saveClipboardImage();
+        QVERIFY(!second.isEmpty());
+        QVERIFY(second != reference);
+        QVERIFY(QFileInfo::exists(folder.filePath(second)));
+
+        clipboard->clear();
+    }
+
+    void refusesToPasteAnImageIntoAnUntitledDocument() {
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        QVERIFY(clipboard);
+
+        QImage pasted(2, 2, QImage::Format_RGB32);
+        pasted.fill(Qt::blue);
+        clipboard->setImage(pasted);
+
+        // Nothing is written, because an untitled document has no folder for the
+        // image to sit in that a later Save As would keep it beside.
+        Backend backend;
+        QVERIFY(backend.saveClipboardImage().isEmpty());
+        QVERIFY(backend.status().contains(QStringLiteral("Save the document first")));
+
+        clipboard->clear();
+    }
+
+    void rendersAPastedImageInThePreview() {
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        QVERIFY(clipboard);
+
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("notes.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly | QIODevice::Text));
+        seed.write("# Notes\n");
+        seed.close();
+
+        QImage source(6, 4, QImage::Format_RGB32);
+        source.fill(Qt::green);
+        clipboard->setImage(source);
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        backend.open(QUrl::fromLocalFile(path));
+        const QString reference = backend.saveClipboardImage();
+        QVERIFY(!reference.isEmpty());
+
+        QObject *preview = window->findChild<QObject *>(QStringLiteral("renderedPreview"));
+        QVERIFY(preview);
+        backend.attachPreviewDocument(
+            preview->property("textDocument").value<QQuickTextDocument *>());
+        backend.setPreviewMarkdown(QStringLiteral("![a note](") + reference
+                                   + QStringLiteral(")"));
+
+        auto *previewDocument = preview->property("textDocument")
+                                    .value<QQuickTextDocument *>()->textDocument();
+        QVERIFY(previewDocument);
+
+        // The paste writes where the preview is allowed to read, so the
+        // reference it inserted resolves to a picture rather than to nothing.
+        QString imageName;
+        for (QTextBlock block = previewDocument->begin();
+             block.isValid() && imageName.isEmpty(); block = block.next()) {
+            for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
+                const QTextCharFormat format = it.fragment().charFormat();
+                if (format.isImageFormat()) {
+                    imageName = format.toImageFormat().name();
+                    break;
+                }
+            }
+        }
+        QVERIFY2(!imageName.isEmpty(), "the preview holds no image at all");
+
+        const QVariant resource = previewDocument->resource(QTextDocument::ImageResource,
+                                                            QUrl(imageName));
+        QCOMPARE(qvariant_cast<QImage>(resource).size(), source.size());
+
+        clipboard->clear();
     }
 
 private:
