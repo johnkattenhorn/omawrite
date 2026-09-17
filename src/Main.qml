@@ -52,8 +52,10 @@ ApplicationWindow {
     // to put it, so the first close is refused and says so; a second one is
     // taken as meaning it.
     onClosing: function(close) {
-        if (closeAnyway || backend.saveBeforeClosing())
+        if (closeAnyway || backend.saveBeforeClosing()) {
+            backend.prepareForApplicationClose();
             return;
+        }
         close.accepted = false;
         closeAnyway = true;
     }
@@ -78,6 +80,53 @@ ApplicationWindow {
         if (!backend.saveBeforeLeaving())
             return;
         backend.open(url);
+    }
+
+    // Autosave means a tab never holds work its file does not, so closing one
+    // writes it on the way out rather than asking about it.
+    function requestCloseTab() {
+        if (backend.saveBeforeLeaving())
+            backend.closeActiveBuffer();
+    }
+
+    function scrollTabs(direction) {
+        tabFlick.contentX = Math.max(0, Math.min(tabFlick.contentWidth - tabFlick.width,
+                                                  tabFlick.contentX + direction * tabFlick.width * 0.75));
+    }
+
+    function selectAdjacentTab(direction) {
+        if (backend.buffers.length < 2)
+            return;
+
+        for (var index = 0; index < backend.buffers.length; ++index) {
+            if (backend.buffers[index].id !== backend.activeBufferId)
+                continue;
+            backend.selectBuffer(backend.buffers[(index + direction + backend.buffers.length)
+                                                 % backend.buffers.length].id);
+            return;
+        }
+    }
+
+    function ensureActiveTabVisible() {
+        for (var index = 0; index < backend.buffers.length; ++index) {
+            if (backend.buffers[index].id !== backend.activeBufferId)
+                continue;
+
+            var tab = tabRepeater.itemAt(index);
+            if (!tab) {
+                activeTabVisibilityTimer.restart();
+                return;
+            }
+
+            if (tab.x < tabFlick.contentX) {
+                tabFlick.contentX = tab.x;
+                return;
+            }
+
+            if (tab.x + tab.width > tabFlick.contentX + tabFlick.width)
+                tabFlick.contentX = tab.x + tab.width - tabFlick.width;
+            return;
+        }
     }
 
     // A closing modal hands focus back to whatever held it before it opened,
@@ -232,10 +281,85 @@ ApplicationWindow {
         editor.forceActiveFocus();
     }
 
+    function restoreActiveCursor() {
+        activeBufferRestoreTimer.restart();
+    }
+
+    Timer {
+        id: activeBufferRestoreTimer
+        interval: 100
+        repeat: false
+        onTriggered: {
+            if (editor.text !== backend.activeBufferText) {
+                restart();
+                return;
+            }
+            editor.cursorPosition = backend.activeCursorPosition;
+            editorFlick.ensureCursorVisible();
+            backend.finishActiveBufferRestore();
+        }
+    }
+
+    Timer {
+        id: activeTabVisibilityTimer
+        interval: 0
+        repeat: false
+        onTriggered: win.ensureActiveTabVisible()
+    }
+
+    Connections {
+        target: backend
+        function onActiveBufferIdChanged() {
+            activeTabVisibilityTimer.restart();
+        }
+    }
+
     Shortcut {
         sequence: "Ctrl+S"
         context: Qt.ApplicationShortcut
         onActivated: backend.save()
+    }
+
+    Shortcut {
+        objectName: "newTabShortcut"
+        sequence: "Ctrl+T"
+        context: Qt.WindowShortcut
+        onActivated: backend.newBuffer()
+    }
+
+    Shortcut {
+        objectName: "closeTabShortcut"
+        sequence: "Ctrl+W"
+        context: Qt.WindowShortcut
+        onActivated: win.requestCloseTab()
+    }
+
+    Shortcut {
+        objectName: "nextTabShortcut"
+        sequence: "Ctrl+Tab"
+        context: Qt.WindowShortcut
+        onActivated: win.selectAdjacentTab(1)
+    }
+
+    Shortcut {
+        objectName: "previousTabShortcut"
+        sequence: "Ctrl+Shift+Tab"
+        context: Qt.WindowShortcut
+        onActivated: win.selectAdjacentTab(-1)
+    }
+
+    Shortcut {
+        objectName: "moveTabLeftShortcut"
+        sequence: "Ctrl+Shift+PgUp"
+        context: Qt.WindowShortcut
+        onActivated: backend.moveActiveBuffer(-1)
+    }
+
+    Shortcut {
+        objectName: "moveTabRightShortcut"
+        sequence: "Ctrl+Shift+PgDown"
+        context: Qt.WindowShortcut
+        onActivated: backend.moveActiveBuffer(1)
     }
 
     Shortcut {
@@ -304,8 +428,9 @@ ApplicationWindow {
     }
 
     Shortcut {
+        objectName: "newWindowShortcut"
         sequence: "Ctrl+N"
-        context: Qt.ApplicationShortcut
+        context: Qt.WindowShortcut
         onActivated: backend.newWindow()
     }
 
@@ -394,6 +519,10 @@ ApplicationWindow {
             externalChangeDialog.locallyModified = locallyModified;
             externalChangeDialog.open();
         }
+
+        function onActiveBufferChanged() {
+            win.restoreActiveCursor();
+        }
     }
 
     Dialogs.FileDialog {
@@ -435,7 +564,7 @@ ApplicationWindow {
         standardButtons: Dialog.Close
         anchors.centerIn: parent
         contentItem: Label {
-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
+            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
             lineHeight: 1.5
         }
     }
@@ -488,6 +617,128 @@ ApplicationWindow {
     Item {
         anchors.fill: parent
         anchors.leftMargin: fileSidebar.width
+
+        Item {
+            id: tabBar
+            objectName: "tabBar"
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.topMargin: 8
+            anchors.leftMargin: 12
+            anchors.rightMargin: 12
+            height: 28
+            visible: backend.buffers.length > 1
+            z: 2
+
+            Flickable {
+                id: tabFlick
+                objectName: "tabFlick"
+                anchors.fill: parent
+                clip: true
+                contentWidth: tabStrip.width
+                contentHeight: height
+                flickableDirection: Flickable.HorizontalFlick
+                boundsBehavior: Flickable.StopAtBounds
+
+                Row {
+                    id: tabStrip
+                    spacing: 4
+
+                    Repeater {
+                        id: tabRepeater
+                        model: backend.buffers
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: tabLabel.implicitWidth + 20
+                            height: 28
+                            color: modelData.id === backend.activeBufferId
+                                ? backend.themeAccent
+                                : (win.darkMode ? "#252525" : "#e7e7e7")
+
+                            Label {
+                                id: tabLabel
+                                anchors.centerIn: parent
+                                text: (modelData.externalChanged ? "• " : "")
+                                    + (modelData.modified ? "* " : "")
+                                    + backend.bufferTitle(modelData, index)
+                                color: modelData.id === backend.activeBufferId
+                                    ? "white"
+                                    : win.textColor
+                                font.family: "iA Writer Mono S"
+                                font.pixelSize: win.scaledSize(11)
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: backend.selectBuffer(modelData.id)
+                            }
+                        }
+                    }
+                }
+
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onWheel: function(wheel) {
+                        var delta = wheel.pixelDelta.x !== 0 ? wheel.pixelDelta.x : wheel.pixelDelta.y;
+                        if (delta === 0)
+                            delta = wheel.angleDelta.x !== 0 ? wheel.angleDelta.x : wheel.angleDelta.y;
+                        win.scrollTabs(delta > 0 ? -1 : 1);
+                        wheel.accepted = true;
+                    }
+                }
+            }
+
+            Rectangle {
+                id: leftTabScroll
+                objectName: "leftTabScroll"
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                width: 24
+                height: parent.height
+                visible: tabFlick.contentX > 0
+                color: win.darkMode ? "#181818" : "#f4f4f4"
+                z: 1
+
+                Label {
+                    anchors.centerIn: parent
+                    text: "‹"
+                    color: win.textColor
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: win.scrollTabs(-1)
+                }
+            }
+
+            Rectangle {
+                id: rightTabScroll
+                objectName: "rightTabScroll"
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: 24
+                height: parent.height
+                visible: tabFlick.contentX + tabFlick.width < tabFlick.contentWidth
+                color: win.darkMode ? "#181818" : "#f4f4f4"
+                z: 1
+
+                Label {
+                    anchors.centerIn: parent
+                    text: "›"
+                    color: win.textColor
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: win.scrollTabs(1)
+                }
+            }
+        }
 
         Flickable {
             id: editorFlick
@@ -697,7 +948,7 @@ ApplicationWindow {
                 x: renderType === TextEdit.NativeRendering
                     ? Math.round((editorFlick.width - width) / 2)
                     : (editorFlick.width - width) / 2
-                y: Math.max(42, Math.round(win.height * 0.05))
+                y: Math.max(72, Math.round(win.height * 0.05))
                 width: win.editorWidth
                 height: Math.max(editorFlick.height - y - 96, implicitHeight + 20)
                 text: ""
@@ -721,6 +972,19 @@ ApplicationWindow {
                 renderType: Screen.devicePixelRatio % 1 === 0 ? TextEdit.NativeRendering : TextEdit.QtRendering
                 cursorDelegate: caretShape
                 onCursorRectangleChanged: editorFlick.ensureCursorVisible()
+                onCursorPositionChanged: {
+                    if (!backend.restoringActiveBuffer)
+                        backend.updateActiveEditorState(cursorPosition, selectionStart, selectionEnd);
+                }
+                onSelectionStartChanged: {
+                    if (!backend.restoringActiveBuffer)
+                        backend.updateActiveEditorState(cursorPosition, selectionStart, selectionEnd);
+                }
+                onSelectionEndChanged: {
+                    if (!backend.restoringActiveBuffer)
+                        backend.updateActiveEditorState(cursorPosition, selectionStart, selectionEnd);
+                }
+
                 onContentSizeChanged: win.settleCaret()
 
                 // TextEdit steals the pointer grab for selection, so TapHandler
@@ -1116,7 +1380,12 @@ ApplicationWindow {
                     rebuildChecklistItems();
                     if (win.searchUpdating)
                         return;
+                    if (backend.restoringActiveBuffer) {
+                        activeBufferRestoreTimer.restart();
+                        return;
+                    }
                     var contentChanged = backend.editorTextChanged();
+                    backend.updateActiveEditorState(cursorPosition, selectionStart, selectionEnd);
                     if (contentChanged) {
                         // A failed close only confirms discarding the text that
                         // was on screen for that attempt. New writing must get
@@ -1196,6 +1465,7 @@ ApplicationWindow {
 
                 Component.onCompleted: {
                     backend.attachDocument(textDocument);
+                    win.restoreActiveCursor();
                     rebuildChecklistItems();
                     forceActiveFocus();
                     editorFlick.settlingDocument = false;

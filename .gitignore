@@ -1,6 +1,7 @@
 /build/
 /build-tests/
 /.scratch/
+/.worktrees/
 /pkg/
 /pkgbuild/pkg/
 /pkgbuild/src/

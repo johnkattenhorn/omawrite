@@ -12,6 +12,9 @@
 #include <QVariantMap>
 #include <memory>
 
+#include "buffersession.h"
+#include "workspacesession.h"
+
 class MarkdownHighlighter;
 class PreviewDocument;
 class QFont;
@@ -22,6 +25,13 @@ class QLockFile;
 class Backend : public QObject {
     Q_OBJECT
     Q_PROPERTY(QUrl fileUrl READ fileUrl NOTIFY fileUrlChanged)
+    Q_PROPERTY(QVariantList buffers READ buffers NOTIFY buffersChanged)
+    Q_PROPERTY(QString activeBufferId READ activeBufferId NOTIFY activeBufferChanged)
+    Q_PROPERTY(int activeCursorPosition READ activeCursorPosition NOTIFY activeBufferChanged)
+    Q_PROPERTY(int activeSelectionStart READ activeSelectionStart NOTIFY activeBufferChanged)
+    Q_PROPERTY(int activeSelectionEnd READ activeSelectionEnd NOTIFY activeBufferChanged)
+    Q_PROPERTY(QString activeBufferText READ activeBufferText NOTIFY activeBufferChanged)
+    Q_PROPERTY(bool restoringActiveBuffer READ restoringActiveBuffer NOTIFY activeBufferChanged)
     Q_PROPERTY(QString fileName READ fileName NOTIFY fileUrlChanged)
     Q_PROPERTY(bool modified READ modified NOTIFY modifiedChanged)
     Q_PROPERTY(QString status READ status NOTIFY statusChanged)
@@ -39,12 +49,25 @@ class Backend : public QObject {
 
 public:
     explicit Backend(QObject *parent = nullptr);
+    Backend(const QString &stateDirectory, QObject *parent = nullptr);
+    Backend(WorkspaceSession *workspaceSession, const QString &windowId,
+            QObject *parent = nullptr);
     ~Backend() override;
 
     void setParentWindow(QWindow *window);
 
     QUrl fileUrl() const { return m_fileUrl; }
+    QVariantList buffers() const { return m_workspaceSession
+            ? m_workspaceSession->tabs(m_workspaceWindowId) : m_bufferSession.buffers(); }
+    QString activeBufferId() const { return m_workspaceSession
+            ? m_workspaceSession->activeTabId(m_workspaceWindowId) : m_bufferSession.activeBufferId(); }
+    int activeCursorPosition() const { return m_cursorPosition; }
+    int activeSelectionStart() const { return m_selectionStart; }
+    int activeSelectionEnd() const { return m_selectionEnd; }
+    QString activeBufferText() const { return m_activeBufferText; }
+    bool restoringActiveBuffer() const { return m_restoringActiveBuffer; }
     QString fileName() const;
+    Q_INVOKABLE QString bufferTitle(const QVariantMap &buffer, int index) const;
 
     bool modified() const { return m_modified; }
     QString status() const { return m_status; }
@@ -72,6 +95,14 @@ public:
     Q_INVOKABLE void attachPreviewDocument(QObject *textDocument);
     Q_INVOKABLE void setPreviewMarkdown(const QString &markdown);
     Q_INVOKABLE void setPreviewWidth(int width);
+    Q_INVOKABLE QString newBuffer();
+    Q_INVOKABLE bool selectBuffer(const QString &id);
+    Q_INVOKABLE bool moveActiveBuffer(int direction);
+    Q_INVOKABLE bool closeActiveBuffer();
+    Q_INVOKABLE bool discardActiveBuffer();
+    Q_INVOKABLE void prepareForApplicationClose();
+    Q_INVOKABLE void finishActiveBufferRestore();
+    Q_INVOKABLE void updateActiveEditorState(int cursorPosition, int selectionStart, int selectionEnd);
     Q_INVOKABLE void openDialog();
     Q_INVOKABLE void setFolder(const QUrl &url);
     Q_INVOKABLE void openParentFolder();
@@ -103,11 +134,15 @@ public:
     Q_INVOKABLE QVariantMap linkAt(int position) const;
     Q_INVOKABLE void notifyMissingNote(const QString &target);
     static QString resolveWikilinkPath(const QString &currentFile, const QString &target);
+    void reportExternalChange(bool deleted);
+    void refreshBuffers();
     Q_INVOKABLE QVariantMap windowGeometry() const;
     Q_INVOKABLE void saveWindowGeometry(int x, int y, int width, int height, bool maximized);
 
 signals:
     void fileUrlChanged();
+    void buffersChanged();
+    void activeBufferChanged();
     void modifiedChanged();
     void statusChanged();
     void wordCountChanged();
@@ -122,9 +157,15 @@ signals:
     void folderChanged();
     void documentLoaded();
     void previewChanged();
+    void newWindowRequested();
+    void openTabRequested(const QString &tabId);
+    void windowEmptied();
 
 private:
+    void initializeRuntime();
     void loadDocumentText(const QString &text);
+    void loadActiveBuffer();
+    void persistActiveBuffer();
     void setFileUrl(const QUrl &url);
     void setModified(bool modified);
     void setStatus(const QString &status);
@@ -164,11 +205,18 @@ private:
     int m_formattedBlockCount = 0;
     int m_lastChangePos = 0;
     int m_lastChangeAdded = 0;
+    int m_cursorPosition = 0;
+    int m_selectionStart = 0;
+    int m_selectionEnd = 0;
+    QString m_activeBufferText;
     QTimer m_wordCountTimer;
     QTimer m_persistTimer;
     QFileSystemWatcher m_fileWatcher;
     QUrl m_folderUrl;
     QFileSystemWatcher m_folderWatcher;
+    BufferSession m_bufferSession;
+    WorkspaceSession *m_workspaceSession = nullptr;
+    QString m_workspaceWindowId;
     QPointer<QTextDocument> m_document;
     QPointer<QWindow> m_parentWindow;
     QPointer<MarkdownHighlighter> m_highlighter;
@@ -179,6 +227,9 @@ private:
     QByteArray m_lastKnownFileContents;
     bool m_hasKnownFileContents = false;
     bool m_externalChangePending = false;
+    bool m_applicationClosing = false;
+    bool m_restoringActiveBuffer = false;
+    bool m_ignoringInitialCursorReset = false;
     QString m_recoveryPath;
     std::unique_ptr<QLockFile> m_recoveryLock;
 
