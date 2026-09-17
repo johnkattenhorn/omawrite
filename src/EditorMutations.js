@@ -48,6 +48,8 @@ var TAB_WIDTH = 4;
 
 var LIST_ITEM_RE = /^([ \t]*)([-+*]|\d+[.)])([ \t]+)(.*)$/;
 var QUOTE_LINE_RE = /^([ \t]*)(>+)([ \t]+)(.*)$/;
+// A GitHub task marker sits between a list marker and the item's own text.
+var TASK_MARKER_RE = /^\[([ xX])\](?:([ \t]+)|$)/;
 
 function columnWidth(text) {
     var width = 0;
@@ -79,12 +81,20 @@ function isContinuationLine(line) {
 
 function markedLine(match, ordered) {
     var prefix = match[1] + match[2] + match[3];
+    var content = match[4];
+    // A checked or unchecked box belongs to the marker, not to the text, so
+    // an item holding only a box counts as empty and ends the list.
+    var task = content.match(TASK_MARKER_RE);
+    if (task)
+        content = content.slice(task[0].length);
     return {
+        task: task ? { checked: task[1].toLowerCase() === "x",
+                       spacing: task[2] || " " } : null,
         indent: columnWidth(match[1]),
         indentText: match[1],
         marker: match[2],
         spacing: match[3],
-        content: match[4],
+        content: content,
         prefixLength: prefix.length,
         ordered: ordered,
         number: ordered ? parseInt(match[2], 10) : 0,
@@ -455,8 +465,10 @@ function continueBlockPlan(doc, lineIndex, from, to) {
     var region = listRegion(doc, lineIndex, lastLine);
     var newLines = doc.lines.slice(region.start, region.end + 1);
     var split = lineIndex - region.start;
+    // A new item starts unchecked however the one above it was ticked.
+    var task = item.task ? "[ ]" + item.task.spacing : "";
     newLines.splice(split, lastLine - lineIndex + 1, head,
-                    item.indentText + marker + item.spacing + tail);
+                    item.indentText + marker + item.spacing + task + tail);
     // A new item is always a sibling of the one it follows, so it never opens
     // a level and every level start survives the split.
     renumberOrderedItems(newLines, levelStartLines(newLines));

@@ -344,6 +344,15 @@ private slots:
         QVERIFY(pressReturn(QStringLiteral("> quoted"), 8));
         QCOMPARE(result(), QStringLiteral("> quoted\n> "));
 
+        // A task item carries its box onto the next line, always unticked.
+        QVERIFY(pressReturn(QStringLiteral("- [x] done"), 10));
+        QCOMPARE(result(), QStringLiteral("- [x] done\n- [ ] "));
+        QCOMPARE(caret(), 17);
+
+        // An item holding nothing but a box counts as empty and ends the list.
+        QVERIFY(pressReturn(QStringLiteral("- [ ] "), 6));
+        QCOMPARE(result(), QStringLiteral("\n"));
+
         // Ordinary prose has no marker to carry, so Return is left alone.
         QVERIFY(!pressReturn(QStringLiteral("just text"), 9));
     }
