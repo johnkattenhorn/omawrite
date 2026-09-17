@@ -1,3 +1,4 @@
+import QtCore
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
@@ -26,13 +27,17 @@ ApplicationWindow {
     // the app at the sizes it was designed around.
     readonly property real textScale: backend.textScale
     readonly property int editorFontPixelSize: scaledSize(backend.editorFontSize)
-    // Never wider than the Flickable's viewport, whatever the floor asks for:
+    // Never wider than the Flickable's viewport, whatever the measure asks for:
     // a tiling compositor can resize the window below its minimum width.
-    readonly property int editorWidth: Math.min(
-        Math.round(writerFontMetrics.averageCharacterWidth * 65),
+    readonly property int availableEditorWidth: Math.min(
         Math.max(360, width - fileSidebar.width
                  - Math.round(writerFontMetrics.averageCharacterWidth * 20)),
         Math.max(0, width - fileSidebar.width - 48))
+    readonly property int editorWidth: layoutSettings.editorColumns > 0
+        ? Math.min(Math.round(writerFontMetrics.averageCharacterWidth
+                              * Math.max(20, layoutSettings.editorColumns)),
+                   availableEditorWidth)
+        : availableEditorWidth
     property bool searchOpen: false
     property bool sidebarOpen: false
     property int sidebarLogicalWidth: 240
@@ -47,6 +52,15 @@ ApplicationWindow {
     Material.theme: darkMode ? Material.Dark : Material.Light
     Material.accent: backend.themeAccent
     color: pageColor
+
+    // Editor measure in average character widths. 65, the default, is the
+    // measure Omawrite has always had; 0 lets the text fill the window instead,
+    // keeping ten characters of margin on either side.
+    Settings {
+        id: layoutSettings
+        category: "layout"
+        property int editorColumns: 65
+    }
 
     // If the work reached neither its file nor a draft there is nowhere left
     // to put it, so the first close is refused and says so; a second one is

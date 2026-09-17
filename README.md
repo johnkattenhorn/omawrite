@@ -96,7 +96,7 @@ remembered across launches. Desktop text scaling is applied on top of this base 
 
 ## Requirements
 
-- Qt 6: `qt6-base`, `qt6-declarative`, `qt6-quickcontrols2`
+- Qt 6.5 or newer: `qt6-base`, `qt6-declarative`, `qt6-quickcontrols2`
 - `xdg-desktop-portal` and a portal backend
 
 The iA Writer Mono font is bundled under the SIL Open Font License 1.1; see
