@@ -10,18 +10,28 @@
 #include <QUrl>
 #include <QWindow>
 #include <QFile>
+#include <QFileInfo>
 
 #include "backend.h"
 #include "cli.h"
+#include "remote.h"
 #include "systemtheme.h"
 #include "windowmanager.h"
 #include "workspacesession.h"
 
 int main(int argc, char *argv[]) {
-    // Answer --help before Qt claims the terminal, so the usage prints even
-    // without a desktop session to open a window in.
-    if (const std::optional<int> exitCode = Cli::handleArguments(argc, argv))
-        return *exitCode;
+    const Cli::Request request = Cli::parse(argc, argv);
+    // Answered before Qt claims the terminal, so these work over ssh and in a
+    // script, with no desktop session and no window.
+    switch (request.kind) {
+    case Cli::Request::Help:
+    case Cli::Request::Error:
+        return request.exitCode;
+    case Cli::Request::Append:
+        return Cli::appendStdin(request.path);
+    default:
+        break;
+    }
 
     QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("omawrite"));
@@ -34,6 +44,18 @@ int main(int argc, char *argv[]) {
     QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/iAWriterMonoS-BoldItalic.ttf"));
     app.setOrganizationName(QStringLiteral("Omacom"));
     app.setOrganizationDomain(QStringLiteral("omacom.io"));
+
+    if (request.kind == Cli::Request::ListTabs)
+        return Cli::listTabs();
+
+    // An Omawrite already on this bus takes the file; a tabbed editor asked to
+    // show something five times should end with five tabs at most, never five
+    // windows. Nobody there means this process is the one that opens.
+    if (request.kind == Cli::Request::Open) {
+        const QString absolute = QFileInfo(request.path).absoluteFilePath();
+        if (Remote::requestOpen(absolute, request.line))
+            return 0;
+    }
 
     QQuickStyle::setStyle(QStringLiteral("Material"));
 
@@ -81,9 +103,14 @@ int main(int argc, char *argv[]) {
     }
     windows.recoverLegacySnapshots();
 
-    const QStringList args = app.arguments();
-    if (args.size() > 1 && !windows.primaryBackend()->modified())
-        windows.primaryBackend()->open(QUrl::fromLocalFile(args.at(1)));
+    // Claimed once there is a window to hand a file to, so an --open racing
+    // this start is answered by a window rather than by an empty process.
+    Remote::claim(&windows);
+
+    if (!request.path.isEmpty() && !windows.primaryBackend()->modified()) {
+        windows.primaryBackend()->openAtLine(
+            QUrl::fromLocalFile(QFileInfo(request.path).absoluteFilePath()), request.line);
+    }
 
     return app.exec();
 }

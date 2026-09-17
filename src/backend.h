@@ -58,6 +58,11 @@ public:
     ~Backend() override;
 
     void setParentWindow(QWindow *window);
+    QWindow *parentWindow() const;
+
+    // Open a file and put the caret on a 1-based line, or leave it where the
+    // tab left it when the line is 0. This is what `omawrite --open` reaches.
+    Q_INVOKABLE void openAtLine(const QUrl &url, int line);
 
     QUrl fileUrl() const { return m_fileUrl; }
     QVariantList buffers() const { return m_workspaceSession

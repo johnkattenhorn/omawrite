@@ -318,6 +318,10 @@ void Backend::setParentWindow(QWindow *window) {
     m_parentWindow = window;
 }
 
+QWindow *Backend::parentWindow() const {
+    return m_parentWindow;
+}
+
 QString Backend::fileName() const {
     if (!m_fileUrl.isValid() || m_fileUrl.isEmpty())
         return QStringLiteral("Untitled.md");
@@ -519,6 +523,26 @@ void Backend::saveSidebarWidth(int width) {
 
 void Backend::open(const QUrl &url) {
     openPath(url, true);
+}
+
+void Backend::openAtLine(const QUrl &url, int line) {
+    openPath(url, true);
+    if (line <= 0 || !m_document)
+        return;
+
+    // Lines are 1-based where they come from: an editor, a compiler, a grep.
+    // Past the end of the document the last line is as close as we can get,
+    // which beats refusing to move at all.
+    const QTextBlock block = m_document->findBlockByNumber(
+        qBound(0, line - 1, qMax(0, m_document->blockCount() - 1)));
+    if (!block.isValid())
+        return;
+
+    m_cursorPosition = block.position();
+    m_selectionStart = m_cursorPosition;
+    m_selectionEnd = m_cursorPosition;
+    persistActiveBuffer();
+    emit activeBufferChanged();
 }
 
 void Backend::openPath(const QUrl &url, bool mayStartNewFile) {

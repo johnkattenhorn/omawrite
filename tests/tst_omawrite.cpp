@@ -3305,6 +3305,87 @@ private slots:
         untouched.close();
     }
 
+    void parsesTheCommandLine() {
+        using Request = Cli::Request;
+        const auto parse = [](const QStringList &words) { return Cli::parse(words); };
+
+        QCOMPARE(parse({QStringLiteral("omawrite")}).kind, Request::Run);
+        QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("draft.md")}).path,
+                 QStringLiteral("draft.md"));
+        QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--list-tabs")}).kind,
+                 Request::ListTabs);
+
+        const Request opened = parse({QStringLiteral("omawrite"), QStringLiteral("--open"),
+                                      QStringLiteral("notes.md:12")});
+        QCOMPARE(opened.kind, Request::Open);
+        QCOMPARE(opened.path, QStringLiteral("notes.md"));
+        QCOMPARE(opened.line, 12);
+
+        // A colon is legal in a filename, so only a trailing run of digits is a
+        // line number: guessing wrong would open a file nobody named.
+        QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--open"),
+                        QStringLiteral("10:30 standup.md")}).path,
+                 QStringLiteral("10:30 standup.md"));
+        QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--open"),
+                        QStringLiteral("notes.md:")}).path,
+                 QStringLiteral("notes.md:"));
+        QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--open"),
+                        QStringLiteral("notes.md:0")}).line, 0);
+
+        // --append takes the name whole: its text is on stdin, so a line number
+        // would have nothing to mean.
+        const Request appended = parse({QStringLiteral("omawrite"), QStringLiteral("--append"),
+                                        QStringLiteral("log.md:9")});
+        QCOMPARE(appended.kind, Request::Append);
+        QCOMPARE(appended.path, QStringLiteral("log.md:9"));
+
+        QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--open")}).kind,
+                 Request::Error);
+        QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--nope")}).exitCode, 1);
+    }
+
+    void appendsToAFileWithoutRunningTheWindow() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("log.md"));
+
+        // A file with no closing newline would otherwise have the note run on
+        // from its last line, which is never what appending means.
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly | QIODevice::Text));
+        seed.write("first line");
+        seed.close();
+
+        const auto append = [&path](const QByteArray &text) {
+            QTemporaryFile input;
+            QVERIFY(input.open());
+            input.write(text);
+            input.flush();
+            input.seek(0);
+            FILE *replaced = freopen(input.fileName().toLocal8Bit().constData(), "r", stdin);
+            QVERIFY(replaced);
+            const int code = Cli::appendStdin(path);
+            fclose(stdin);
+            QCOMPARE(code, 0);
+        };
+
+        append("appended\n");
+
+        QFile written(path);
+        QVERIFY(written.open(QIODevice::ReadOnly | QIODevice::Text));
+        QCOMPARE(written.readAll(), QByteArray("first line\nappended\n"));
+    }
+
+    void listsNothingWhenThereIsNoSession() {
+        // A first run has no session file, and a caller looping over the output
+        // should see an empty list rather than an error.
+        const QString sessionPath =
+            QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+                .filePath(QStringLiteral("session.json"));
+        QFile::remove(sessionPath);
+        QCOMPARE(Cli::listTabs(), 0);
+    }
+
 private:
     // Points HOME at a scratch tree holding one colors.toml, and puts it back on the way out.
     struct ScopedTheme {

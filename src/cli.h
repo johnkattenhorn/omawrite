@@ -10,6 +10,41 @@ namespace Cli {
 
 QString usage();
 
+// What the arguments asked for. Everything but Run is answered without a
+// window: the terminal is the interface for these, and a script that asked to
+// append a line does not want an editor to appear.
+struct Request {
+    enum Kind {
+        Run,       // Open the window, on `path` when there is one.
+        Help,      // Usage was printed; exit with `exitCode`.
+        Error,     // The arguments made no sense; exit with `exitCode`.
+        Open,      // Show `path` in the running window, at `line` when given.
+        Append,    // Add what is on stdin to the end of `path`.
+        ListTabs,  // Print what the last session left open.
+    };
+
+    Kind kind = Run;
+    QString path;
+    int line = 0;  // 1-based; 0 means the caret is left where it was.
+    int exitCode = 0;
+};
+
+// FILE or FILE:LINE. The line is only taken where what follows the last colon
+// is all digits, so a file whose name holds a colon still opens.
+Request parseTarget(Request::Kind kind, const QString &argument);
+
+Request parse(const QStringList &arguments);
+Request parse(int argc, char *argv[]);
+
+// Print what the last session left open, one path per line. Reads the session
+// file directly: asking a running Omawrite would mean there had to be one.
+int listTabs();
+
+// Add what is on stdin to the end of `path`, creating it when it is not there.
+// An Omawrite with the file open notices the change through its own watcher, so
+// this needs no running instance and no window.
+int appendStdin(const QString &path);
+
 // The exit code main should return when the arguments are answered without
 // starting the app, or nothing when Omawrite should open as usual.
 std::optional<int> handleArguments(const QStringList &arguments);
