@@ -6,7 +6,7 @@
 # reason: `pacman -Q omawrite` should say which build is installed.
 
 pkgname=omawrite
-pkgver=0.5.0.r98.ge04db39
+pkgver=0.5.0.r100.gca121b8
 pkgrel=1
 pkgdesc='Dead-simple Markdown writing app built with Qt Quick (custom fork: tabs, preview, sidebar, image paste, D-Bus CLI)'
 arch=('x86_64')
