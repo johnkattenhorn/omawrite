@@ -932,6 +932,32 @@ void Backend::setStatus(const QString &status) {
     emit statusChanged();
 }
 
+// NotOpened is kept apart from Failed because only it leaves the target
+// definitely untouched, and only then is a destructive retry safe.
+enum class AtomicWrite { Written, Failed, NotOpened };
+
+static AtomicWrite writeDocumentAtomically(const QString &path, const QByteArray &contents)
+{
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return AtomicWrite::NotOpened;
+    if (file.write(contents) != contents.size()) {
+        file.cancelWriting();
+        return AtomicWrite::Failed;
+    }
+    // commit() flushes, fsyncs, and atomically renames the temp file into place,
+    // returning false (and leaving the original untouched) on any write error.
+    return file.commit() ? AtomicWrite::Written : AtomicWrite::Failed;
+}
+
+static bool writeDocumentDirectly(const QString &path, const QByteArray &contents)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate))
+        return false;
+    return file.write(contents) == contents.size() && file.flush();
+}
+
 bool Backend::saveTo(const QUrl &url) {
     // The prompt is on screen asking which version to keep, so the file is not
     // ours to write until it is answered. Saving somewhere else is still fine.
@@ -947,16 +973,9 @@ bool Backend::saveTo(const QUrl &url) {
         return false;
     }
 
-    const QString targetName = QFileInfo(url.toLocalFile()).fileName();
-    QSaveFile file(url.toLocalFile());
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        m_closeAfterSave = false;
-        setStatus(QStringLiteral("Could not save %1.").arg(targetName));
-        return false;
-    }
-
+    const QString path = url.toLocalFile();
+    const QString targetName = QFileInfo(path).fileName();
     const QByteArray contents = currentDocumentText().toUtf8();
-    file.write(contents);
 
     // QSaveFile commits by replacing the target. Stop watching the old inode
     // before that replacement so our own write is not classified as external.
@@ -964,12 +983,23 @@ bool Backend::saveTo(const QUrl &url) {
     if (!watched.isEmpty())
         m_fileWatcher.removePaths(watched);
 
-    // commit() flushes, fsyncs, and atomically renames the temp file into place,
-    // returning false (and leaving the original untouched) on any write error.
-    if (!file.commit()) {
+    // QSaveFile uses Linux O_TMPFILE. CIFS/SMB returns ENOENT for that instead
+    // of EOPNOTSUPP, so Qt never falls back to a named temp file and open()
+    // fails. Direct write still works on those mounts. Retry only that case:
+    // once QSaveFile has opened, the document on disk survives any later error,
+    // and truncating it to try again would destroy what the failure spared.
+    // A folder we may not write to refuses the temp file for a reason a direct
+    // write cannot answer, so that refusal is reported rather than worked
+    // around — the atomic write is given up only where it was never possible.
+    const AtomicWrite atomic = writeDocumentAtomically(path, contents);
+    const bool mayRetryDirectly = atomic == AtomicWrite::NotOpened
+        && QFileInfo(QFileInfo(path).absolutePath()).isWritable();
+    if (atomic == AtomicWrite::Failed
+        || (atomic == AtomicWrite::NotOpened
+            && (!mayRetryDirectly || !writeDocumentDirectly(path, contents)))) {
         watchCurrentFile();
         m_closeAfterSave = false;
-        setStatus(QStringLiteral("Could not write %1.").arg(targetName));
+        setStatus(QStringLiteral("Could not save %1.").arg(targetName));
         return false;
     }
 
