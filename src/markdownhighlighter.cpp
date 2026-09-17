@@ -400,8 +400,10 @@ QList<MarkdownHighlighter::InlineMarkup> MarkdownHighlighter::inlineMarkup(const
     QRegularExpressionMatchIterator strikethroughMatches = strikethroughRe.globalMatch(text);
     while (strikethroughMatches.hasNext()) {
         const QRegularExpressionMatch match = strikethroughMatches.next();
+        if (insideCode(match))
+            continue;
         markup.append({InlineKind::Strikethrough, span(match, 2),
-                       {span(match, 1), span(match, 3)}});
+                       {span(match, 1), span(match, 3)}, {}});
     }
 
     static const QRegularExpression linkRe(

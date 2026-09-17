@@ -1607,6 +1607,12 @@ private slots:
         QCOMPARE(backend.themeForeground(), QStringLiteral("#222324"));
     }
 
+    void ignoresStrikethroughInsideCodeSpans() {
+        // Strikethrough answers to the same rule as the other inline markup.
+        QCOMPARE(MarkdownHighlighter::inlineMarkup(
+                     QStringLiteral("`a ~~b~~ c`")).size(), 0);
+    }
+
     void ignoresInlineMarkdownInsideCodeSpans() {
         QCOMPARE(MarkdownHighlighter::inlineMarkup(
                      QStringLiteral("`The_brown_fox` jumps")).size(), 0);
