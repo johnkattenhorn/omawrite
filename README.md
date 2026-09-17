@@ -74,6 +74,13 @@ starts from the document being written.
 Drag its right edge to widen it; the width is remembered, and stops short of
 squeezing the writing column below its usual measure.
 
+## Measure
+
+The writing column is 65 characters wide. To change it, set `editorColumns`
+under `[layout]` in `~/.config/Omawrite/Omawrite.conf` — any width from 20
+characters up, or `0` to let the text fill the window with ten characters of
+margin on either side.
+
 ## Saving
 
 Writing is saved a moment after you stop typing, and again whenever you leave
