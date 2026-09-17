@@ -9,6 +9,7 @@ HEADERS += \
     src/workspacesession.h \
     src/windowmanager.h \
     src/backend.h \
+    src/cli.h \
     src/markdownhighlighter.h \
     src/systemtheme.h
 
@@ -18,6 +19,7 @@ SOURCES += \
     src/workspacesession.cpp \
     src/windowmanager.cpp \
     src/backend.cpp \
+    src/cli.cpp \
     src/markdownhighlighter.cpp \
     src/systemtheme.cpp
 

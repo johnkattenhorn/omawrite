@@ -19,6 +19,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 
+#include "cli.h"
 #include "backend.h"
 #include "markdownhighlighter.h"
 
@@ -2946,6 +2947,22 @@ private slots:
                  qPrintable(QStringLiteral("caret centre %1 in a viewport of %2")
                                 .arg(caretCentre)
                                 .arg(viewportHeight)));
+    }
+
+    void answersHelpBeforeOpeningAWindow() {
+        const QString usage = Cli::usage();
+        QVERIFY(usage.contains(QStringLiteral("omawrite [FILE]")));
+        QVERIFY(usage.contains(QStringLiteral("-h, --help")));
+
+        QCOMPARE(Cli::handleArguments({QStringLiteral("omawrite"), QStringLiteral("--help")}),
+                 std::optional<int>(0));
+        QCOMPARE(Cli::handleArguments({QStringLiteral("omawrite"), QStringLiteral("-h")}),
+                 std::optional<int>(0));
+        QCOMPARE(Cli::handleArguments({QStringLiteral("omawrite"), QStringLiteral("--nope")}),
+                 std::optional<int>(1));
+        QCOMPARE(Cli::handleArguments({QStringLiteral("omawrite")}), std::nullopt);
+        QCOMPARE(Cli::handleArguments({QStringLiteral("omawrite"), QStringLiteral("draft.md")}),
+                 std::nullopt);
     }
 
 private:

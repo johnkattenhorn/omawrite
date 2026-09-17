@@ -10,12 +10,14 @@ SOURCES += \
     ../src/workspacesession.cpp \
     ../src/windowmanager.cpp \
     ../src/backend.cpp \
+    ../src/cli.cpp \
     ../src/markdownhighlighter.cpp
 HEADERS += \
     ../src/buffersession.h \
     ../src/workspacesession.h \
     ../src/windowmanager.h \
     ../src/backend.h \
+    ../src/cli.h \
     ../src/markdownhighlighter.h
 
 QT += widgets printsupport quickcontrols2 quickdialogs2 dbus
