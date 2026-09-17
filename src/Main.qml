@@ -755,7 +755,11 @@ ApplicationWindow {
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
-                            width: tabLabel.implicitWidth + 20
+                            id: tabItem
+                            objectName: "tab"
+                            // Room for the close cross, which sits inside the tab
+                            // rather than beside it so the hit target is the tab.
+                            width: tabLabel.implicitWidth + 20 + closeTab.width
                             height: 28
                             color: modelData.id === backend.activeBufferId
                                 ? backend.themeAccent
@@ -763,7 +767,9 @@ ApplicationWindow {
 
                             Label {
                                 id: tabLabel
-                                anchors.centerIn: parent
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
                                 text: (modelData.externalChanged ? "• " : "")
                                     + (modelData.modified ? "* " : "")
                                     + backend.bufferTitle(modelData, index)
@@ -778,6 +784,43 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: backend.selectBuffer(modelData.id)
+                            }
+
+                            // Ctrl+W closes the tab you are on. This closes any
+                            // of them, for when the keyboard is not where your
+                            // hand is. It sits above the tab's own MouseArea so
+                            // a click on the cross does not also select the tab.
+                            Item {
+                                id: closeTab
+                                objectName: "closeTab"
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 20
+                                height: 20
+
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "\u00d7"
+                                    color: tabLabel.color
+                                    opacity: closeArea.containsMouse ? 1 : 0.5
+                                    font.family: "iA Writer Mono S"
+                                    font.pixelSize: win.scaledSize(13)
+                                }
+
+                                MouseArea {
+                                    id: closeArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        // Closing only ever closes the active
+                                        // tab, so the one being shut has to be
+                                        // the one showing first.
+                                        if (modelData.id !== backend.activeBufferId)
+                                            backend.selectBuffer(modelData.id);
+                                        win.requestCloseTab();
+                                    }
+                                }
                             }
                         }
                     }
@@ -1681,6 +1724,22 @@ ApplicationWindow {
                     onClicked: backend.openDialog()
                 }
 
+                FooterIconButton {
+                    objectName: "filesButton"
+                    iconName: "files"
+                    iconColor: win.mutedColor
+                    tooltip: "Files"
+                    onClicked: win.setSidebarOpen(!win.sidebarOpen)
+                }
+
+                FooterIconButton {
+                    objectName: "modeToggle"
+                    iconName: "preview"
+                    iconColor: win.mutedColor
+                    tooltip: win.previewVisible ? "Editor" : "Preview"
+                    onClicked: win.togglePreview()
+                }
+
                 Label {
                     text: backend.status
                     color: win.mutedColor
@@ -1692,22 +1751,6 @@ ApplicationWindow {
                     height: win.scaledSize(16)
                     verticalAlignment: Text.AlignVCenter
                 }
-            }
-
-            FooterIconButton {
-                objectName: "filesButton"
-                iconName: "files"
-                iconColor: win.mutedColor
-                tooltip: "Files"
-                onClicked: win.setSidebarOpen(!win.sidebarOpen)
-            }
-
-            FooterIconButton {
-                objectName: "modeToggle"
-                iconName: "preview"
-                iconColor: win.mutedColor
-                tooltip: win.previewVisible ? "Editor" : "Preview"
-                onClicked: win.togglePreview()
             }
 
             Label {

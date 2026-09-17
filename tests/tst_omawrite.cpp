@@ -12,6 +12,7 @@
 #include <QTextLayout>
 #include <QQuickItem>
 #include <QFont>
+#include <QQmlProperty>
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
@@ -3623,6 +3624,39 @@ private slots:
         // which one survives, so this one still asks.
         QTRY_COMPARE(conflict.count(), 1);
         QCOMPARE(editor->property("text").toString(), QStringLiteral("mine, unsaved"));
+    }
+
+    void closesATabThatIsNotTheOneShowing() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        const QString first = backend.activeBufferId();
+        const QString second = backend.newBuffer();
+        QCOMPARE(backend.buffers().size(), 2);
+        QCOMPARE(backend.activeBufferId(), second);
+
+        // The strip has laid a tab out for each buffer, which is what the close
+        // cross hangs off.
+        auto *tabFlick = window->findChild<QQuickItem *>(QStringLiteral("tabFlick"));
+        QVERIFY(tabFlick);
+        QTRY_VERIFY(tabFlick->property("contentWidth").toReal() > 0);
+
+        // Closing only ever closes the active tab, so a cross on any other one
+        // has to bring its tab forward first. That is the path this takes.
+        QVERIFY(backend.selectBuffer(first));
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "requestCloseTab"));
+        QCOMPARE(backend.buffers().size(), 1);
+        QCOMPARE(backend.activeBufferId(), second);
     }
 
 private:
