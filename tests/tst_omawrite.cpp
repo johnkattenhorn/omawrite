@@ -3659,6 +3659,44 @@ private slots:
         QCOMPARE(backend.activeBufferId(), second);
     }
 
+    void keepsTheDocumentClearOfTheTabStrip() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        auto *bar = window->findChild<QQuickItem *>(QStringLiteral("tabBar"));
+        auto *viewport = window->findChild<QQuickItem *>(QStringLiteral("editorViewport"));
+        QVERIFY(bar);
+        QVERIFY(viewport);
+
+        // One buffer, no strip, and the document has the window to itself.
+        QCOMPARE(backend.buffers().size(), 1);
+        QVERIFY(!bar->property("visible").toBool());
+        QTRY_COMPARE(viewport->mapToScene(QPointF()).y(), qreal(0));
+
+        // A second tab puts the strip up, and the document starts below it
+        // rather than scrolling underneath.
+        backend.newBuffer();
+        QTRY_VERIFY(bar->property("visible").toBool());
+        QTRY_COMPARE(viewport->mapToScene(QPointF()).y(),
+                     bar->mapToScene(QPointF(0, bar->height())).y());
+
+        // The strip paints, so what scrolls behind it cannot show through the
+        // gaps between the tabs.
+        const QColor stripColour = bar->property("color").value<QColor>();
+        QCOMPARE(stripColour.alpha(), 255);
+        QCOMPARE(stripColour, QColor(window->property("pageColor").toString()));
+    }
+
 private:
     // Points HOME at a scratch tree holding one colors.toml, and puts it back on the way out.
     struct ScopedTheme {

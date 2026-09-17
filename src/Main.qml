@@ -722,16 +722,18 @@ ApplicationWindow {
         anchors.fill: parent
         anchors.leftMargin: fileSidebar.width
 
-        Item {
+        // A surface rather than a bare Item: the document scrolls behind this,
+        // and with nothing opaque the text showed through the gaps between the
+        // tabs. Full width and the strip's whole height, so the margins the
+        // tabs sit inside are covered too.
+        Rectangle {
             id: tabBar
             objectName: "tabBar"
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.topMargin: 8
-            anchors.leftMargin: 12
-            anchors.rightMargin: 12
-            height: 28
+            height: 36
+            color: win.pageColor
             visible: backend.buffers.length > 1
             z: 2
 
@@ -739,6 +741,9 @@ ApplicationWindow {
                 id: tabFlick
                 objectName: "tabFlick"
                 anchors.fill: parent
+                anchors.topMargin: 8
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
                 clip: true
                 contentWidth: tabStrip.width
                 contentHeight: height
@@ -890,7 +895,9 @@ ApplicationWindow {
         Flickable {
             id: editorFlick
             objectName: "editorViewport"
-            anchors.top: parent.top
+            // Below the tabs when there are tabs, or the document scrolls up
+            // underneath them.
+            anchors.top: tabBar.visible ? tabBar.bottom : parent.top
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: footer.top
@@ -1101,7 +1108,7 @@ ApplicationWindow {
                 x: renderType === TextEdit.NativeRendering
                     ? Math.round((editorFlick.width - width) / 2)
                     : (editorFlick.width - width) / 2
-                y: Math.max(72, Math.round(win.height * 0.05))
+                y: Math.max(42, Math.round(win.height * 0.05))
                 width: win.editorWidth
                 height: Math.max(editorFlick.height - y - 96, implicitHeight + 20)
                 text: ""
