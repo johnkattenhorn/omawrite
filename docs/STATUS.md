@@ -10,12 +10,13 @@ drive.
 
 ## Where it is
 
-Branch `custom`, 87 commits ahead of `origin/master` (upstream `8f98892`).
-101 tests pass. Clean build, no warnings.
+Branch `custom`, 92 commits ahead of `origin/master` (upstream `8f98892`).
+103 tests pass. Clean build, no warnings. Pushed to
+[johnkattenhorn/omawrite](https://github.com/johnkattenhorn/omawrite).
 
 ```sh
 ./bin/build    # build/omawrite
-./bin/test     # 101 passing
+./bin/test     # 103 passing
 ```
 
 ## What is in it
@@ -43,8 +44,11 @@ Written here:
 - **Image paste** (`Ctrl+V`) — upstream issue #64 had no pull request. Writes to
   an `images/` folder beside the document and inserts a relative reference,
   which is the only shape #68's preview sandbox will load.
-- **Command line** — `--open FILE[:LINE]` over the session bus, `--append FILE`
-  from stdin, `--list-tabs` from the session file.
+- **Command line** — `--open FILE[:LINE] [--tab]` over the session bus,
+  `--append FILE` from stdin, `--list-tabs` from the session file.
+- **Preview scroll sync** — the toggle used to drop the reader at the top.
+- **Link hover** — reworked from #8 onto #40's existing hover, rather than
+  adding a third MouseArea over the editor.
 
 ## Not taken
 
@@ -53,9 +57,6 @@ Written here:
   highlighter opinions, and it restores the `UnsavedChangesDialog` that #22
   deliberately removed for autosave. #60 is the same feature without the
   baggage.
-- **#8** (link URL on hover) — needs a third hover-enabled `MouseArea` over the
-  editor, on top of #40's and #66's. Worth revisiting by reusing #40's existing
-  `target` rather than #8's separate `destination` span.
 - **#9, #61** — obsolete. #22 deleted the dialog they fix.
 
 ## Next
@@ -63,6 +64,7 @@ Written here:
 - Upstreaming. Several of these reconciliations are worth sending back,
   particularly the #66-on-#30 checkbox continuation and the #50 fallback
   narrowing.
-- `--open` currently goes to the primary window. A `--tab` flag to force a new
-  tab rather than reusing the active one would round out the CLI.
-- The preview jumps to the top of the document when toggled; no scroll sync yet.
+- `--open` always reaches the primary window. With more than one window open,
+  choosing which one is not yet answered.
+- The preview keeps its place through a toggle, but it does not follow the
+  caret while you write.
