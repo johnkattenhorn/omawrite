@@ -195,6 +195,16 @@ Backend::Backend(const QString &stateDirectory, QObject *parent)
     QDir().mkpath(stateDirectory);
     if (!m_bufferSession.restore())
         m_bufferSession.createBuffer();
+    for (const QVariant &value : m_bufferSession.buffers()) {
+        const QVariantMap buffer = value.toMap();
+        if (buffer.value(QStringLiteral("id")).toString() != m_bufferSession.activeBufferId())
+            continue;
+        m_activeBufferText = buffer.value(QStringLiteral("text")).toString();
+        m_cursorPosition = buffer.value(QStringLiteral("cursorPosition")).toInt();
+        m_selectionStart = buffer.value(QStringLiteral("selectionStart")).toInt();
+        m_selectionEnd = buffer.value(QStringLiteral("selectionEnd")).toInt();
+        break;
+    }
     // Claim an orphaned snapshot before taking an empty slot. This ensures a
     // crash in window 2 is still recovered even if window 1 exited normally.
     for (int pass = 0; pass < 2 && !m_recoveryLock; ++pass) {
@@ -337,6 +347,11 @@ void Backend::attachDocument(QObject *textDocument) {
     if (m_highlighter)
         delete m_highlighter.data();
 
+    // Attaching is a restore from here to loadActiveBuffer(): the editor reports
+    // an empty document and a caret at nothing while the highlighter and the
+    // typography pass run, and writing that back would erase the tab before it
+    // has been read.
+    m_restoringActiveBuffer = true;
     m_document = quickDocument->textDocument();
     m_lastDocumentText = m_document->toPlainText();
     m_highlighter = new MarkdownHighlighter(m_document);
@@ -353,6 +368,10 @@ void Backend::attachDocument(QObject *textDocument) {
             });
 
     applyDocumentTypography();
+    // The editor is its own document again from here: the guard only covered
+    // the highlighter and typography passes above, which report an empty
+    // document and a caret at nothing before anything has been read.
+    m_restoringActiveBuffer = false;
     restoreRecovery();
     loadActiveBuffer();
 
@@ -474,10 +493,23 @@ void Backend::open(const QUrl &url) {
         return;
     }
 
+    // A file some tab already holds is brought forward rather than opened twice.
     if (m_workspaceSession) {
         const QString openTabId = m_workspaceSession->findOpenLocalFile(url);
         if (!openTabId.isEmpty()) {
             emit openTabRequested(openTabId);
+            return;
+        }
+    } else {
+        for (const QVariant &value : m_bufferSession.buffers()) {
+            const QVariantMap buffer = value.toMap();
+            if (buffer.value(QStringLiteral("fileUrl")).toString() != url.toString())
+                continue;
+            m_bufferSession.selectBuffer(buffer.value(QStringLiteral("id")).toString());
+            loadActiveBuffer();
+            emit buffersChanged();
+            emit activeBufferChanged();
+            setStatus(QStringLiteral("Opened %1").arg(fileName()));
             return;
         }
     }
@@ -494,12 +526,25 @@ void Backend::open(const QUrl &url) {
     // the document being replaced, and an open that failed replaces nothing.
     m_externalChangePending = false;
     persistActiveBuffer();
-    if (m_workspaceSession)
-        m_workspaceSession->createTab(m_workspaceWindowId, url, QString::fromUtf8(contents),
-                                      0, 0, 0, false);
-    else
-        m_bufferSession.updateBuffer(m_bufferSession.openBuffer(url, QString::fromUtf8(contents)),
-                                     url.toString(), QString::fromUtf8(contents), 0, 0, 0, false);
+
+    // Opening takes over the tab that is showing rather than adding one. The
+    // sidebar switches documents freely and autosave has already written
+    // whatever the tab held, so a tab per file opened would turn a morning's
+    // browsing into thirty tabs waiting at the next start. Ctrl+T is what adds
+    // a tab, and that is the only thing that does.
+    const QString text = QString::fromUtf8(contents);
+    if (m_workspaceSession) {
+        const QString reuse = m_workspaceSession->activeTabId(m_workspaceWindowId);
+        if (reuse.isEmpty())
+            m_workspaceSession->createTab(m_workspaceWindowId, url, text, 0, 0, 0, false);
+        else
+            m_workspaceSession->updateTab(m_workspaceWindowId, reuse, url, text, 0, 0, 0, false);
+    } else {
+        QString reuse = m_bufferSession.activeBufferId();
+        if (reuse.isEmpty())
+            reuse = m_bufferSession.createBuffer();
+        m_bufferSession.updateBuffer(reuse, url.toString(), text, 0, 0, 0, false);
+    }
     loadActiveBuffer();
     m_lastKnownFileContents = contents;
     m_hasKnownFileContents = true;
@@ -619,8 +664,31 @@ void Backend::reloadFromDisk() {
         return;
     }
 
-    if (m_fileUrl.isLocalFile())
-        open(m_fileUrl);
+    // Not open(): that brings forward the tab already holding this path, and
+    // this tab is that tab. Reloading means taking what is on disk now.
+    if (m_fileUrl.isLocalFile()) {
+        QFile file(m_fileUrl.toLocalFile());
+        // A reload that could not read leaves the conflict standing, so it falls
+        // through to the question below rather than returning on the spot.
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            const QByteArray contents = file.readAll();
+            m_externalChangePending = false;
+            m_bufferSession.updateBuffer(m_bufferSession.activeBufferId(), m_fileUrl.toString(),
+                                         QString::fromUtf8(contents), 0, 0, 0, false);
+            m_bufferSession.saveNow();
+            m_lastKnownFileContents = contents;
+            m_hasKnownFileContents = true;
+            loadActiveBuffer();
+            clearRecovery();
+            watchCurrentFile();
+            emit buffersChanged();
+            emit activeBufferChanged();
+            setStatus(QStringLiteral("Reloaded %1").arg(fileName()));
+        } else {
+            setStatus(QStringLiteral("Could not reload %1.").arg(fileName()));
+        }
+    }
+
     // A reload that did not happen has answered nothing, and the prompt that
     // asked has already closed itself. Ask again rather than leave the guard
     // standing with nothing able to clear it.
@@ -1206,12 +1274,19 @@ void Backend::loadActiveBuffer() {
     m_cursorPosition = 0;
     m_selectionStart = 0;
     m_selectionEnd = 0;
+    m_restoringActiveBuffer = false;
     setFileUrl(QUrl());
     setModified(false);
 }
 
 void Backend::persistActiveBuffer() {
-    if (activeBufferId().isEmpty())
+    // prepareForApplicationClose() takes the last snapshot and then raises this
+    // flag. What follows is teardown: the editor is being pulled apart and the
+    // empty text it reports on the way out is not what the tab held.
+    // No document attached yet means there is nothing to snapshot: the editor
+    // signals its empty initial caret before the restore has run, and writing
+    // that back would erase the very text about to be loaded.
+    if (!m_document || m_applicationClosing || activeBufferId().isEmpty())
         return;
     m_activeBufferText = currentDocumentText();
     if (m_workspaceSession) {

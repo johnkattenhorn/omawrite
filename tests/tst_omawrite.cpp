@@ -32,6 +32,15 @@ private slots:
                            m_settingsDirectory.path());
     }
 
+    // Every test in the run shares one AppDataLocation, so without this each one
+    // inherits every tab the tests before it opened -- and a Backend that was
+    // meant to start untitled comes up holding someone else's document.
+    void init() {
+        const QString appData =
+            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QFile::remove(QDir(appData).filePath(QStringLiteral("session.json")));
+    }
+
     void countsWords() {
         QCOMPARE(Backend::countWords(QStringLiteral("one two-three don't 42")), 4);
         QCOMPARE(Backend::countWords(QStringLiteral("你好 世界")), 2);
@@ -1232,7 +1241,11 @@ private slots:
 
         // The name gives way rather than the writing: a second note opening
         // on the same line lands beside the first.
-        Backend second;
+        // Its own tab session, or it restores the tab the first one just named
+        // and is no longer an untitled document at all.
+        QTemporaryDir secondState;
+        QVERIFY(secondState.isValid());
+        Backend second(secondState.path());
         second.setFolder(QUrl::fromLocalFile(folder.path()));
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &second);
         QScopedPointer<QObject> secondWindow(component.create());
@@ -2387,8 +2400,12 @@ private slots:
         first->open(QUrl::fromLocalFile(filePath));
         second->open(QUrl::fromLocalFile(filePath));
 
+        // Opening takes over the tab that is showing rather than adding one, so
+        // the first window still holds the one tab it started with. The second
+        // window finds the file already open and brings that tab forward
+        // instead of taking a second copy of the same document.
         QVERIFY(!session.findOpenLocalFile(QUrl::fromLocalFile(filePath)).isEmpty());
-        QCOMPARE(session.windows().at(0).toMap().value(QStringLiteral("tabs")).toList().size(), 2);
+        QCOMPARE(session.windows().at(0).toMap().value(QStringLiteral("tabs")).toList().size(), 1);
         QCOMPARE(session.windows().at(1).toMap().value(QStringLiteral("tabs")).toList().size(), 1);
     }
 
