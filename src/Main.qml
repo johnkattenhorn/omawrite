@@ -492,6 +492,13 @@ ApplicationWindow {
                                     + (win.previewVisible ? preview.implicitHeight
                                                           : editor.implicitHeight) + 220)
             boundsBehavior: Flickable.StopAtBounds
+
+            // Loading a document (recovery, or opening a file) jumps the
+            // cursor to its saved position in the same call that attaches
+            // it, which can scroll the viewport before the user has done
+            // anything; suppress the linger for that one settling jump so
+            // the bar doesn't flash on open.
+            property bool settlingDocument: true
             ScrollBar.vertical: ScrollBar {
                 policy: ScrollBar.AsNeeded
                 // Wheel scrolling moves contentY directly rather than
@@ -656,6 +663,8 @@ ApplicationWindow {
             // Jump to a position, abandoning any wheel animation still running.
             function scrollTo(y) {
                 wheelScroll.stop();
+                if (!settlingDocument)
+                    scrollLinger.restart();
                 contentY = snapToPixel(y);
             }
 
@@ -1129,6 +1138,7 @@ ApplicationWindow {
                     backend.attachDocument(textDocument);
                     rebuildChecklistItems();
                     forceActiveFocus();
+                    editorFlick.settlingDocument = false;
                 }
             }
 
