@@ -534,3 +534,195 @@ function returnPlan(text, selectionStart, selectionEnd) {
     return typed.content.length === 0 ? endBlockPlan(doc, lineIndex, from, to)
                                       : continueBlockPlan(doc, lineIndex, from, to);
 }
+
+// Hard-wrapped text — pasted out of a mail client, a terminal, a file wrapped
+// at 72 columns — ends every line with a newline. Markdown still reads the
+// block as one paragraph, but every edit after the paste has to be rewrapped
+// by hand. Unwrapping puts each paragraph back onto the one line it is and
+// leaves the newlines that mean something alone: the blank line between
+// paragraphs, the lines of a list, a table, a fence or front matter, and the
+// two trailing spaces Markdown reads as a line break of its own.
+
+var FENCE_RE = /^[ \t]{0,3}(```+|~~~+)/;
+var ATX_HEADING_RE = /^[ \t]{0,3}#{1,6}([ \t]|$)/;
+var THEMATIC_BREAK_RE = /^[ \t]{0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$/;
+// The `===` or `---` under a paragraph that makes it a heading.
+var SETEXT_UNDERLINE_RE = /^[ \t]{0,3}(?:=+|-+)[ \t]*$/;
+var TABLE_ROW_RE = /^[ \t]{0,3}\|/;
+var TABLE_DELIMITER_RE = /^[ \t]{0,3}\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)+\|?$/;
+var REFERENCE_DEFINITION_RE = /^[ \t]{0,3}\[[^\]]+\]:/;
+var INDENTED_CODE_RE = /^(?: {4}|\t)/;
+var HARD_BREAK_RE = /(?:[ \t]{2,}|\\)$/;
+var FRONT_MATTER_RE = /^(?:---|\+\+\+)[ \t]*$/;
+var QUOTE_MARKER_RE = /^[ \t]*(?:>[ \t]*)+/;
+var QUOTE_START_RE = /^[ \t]{0,3}>/;
+
+// A file written on Windows carries a carriage return at the end of every
+// line. It is part of the break, not of the text, so it goes when the break
+// does and it never decides anything.
+function withoutCarriageReturn(line) {
+    return line.replace(/\r+$/, "");
+}
+
+// A line Markdown reads as the start of something in its own right, and so
+// never as the continuation of the line above it.
+function startsOwnBlock(line) {
+    return isBlankLine(line)
+        || FENCE_RE.test(line)
+        || ATX_HEADING_RE.test(line)
+        || THEMATIC_BREAK_RE.test(line)
+        || SETEXT_UNDERLINE_RE.test(line)
+        || TABLE_ROW_RE.test(line)
+        || TABLE_DELIMITER_RE.test(line)
+        || REFERENCE_DEFINITION_RE.test(line)
+        // A blockquote interrupts a paragraph rather than continuing it, and a
+        // bare marker is the blank line of the quote it sits in.
+        || QUOTE_START_RE.test(line)
+        || listItem(line) !== null;
+}
+
+// What the block opened by this line does with the lines under it. Prose and
+// the text of a list item or a blockquote run on; everything else keeps the
+// lines it was given.
+function blockKind(line) {
+    // A nested item is indented far enough to look like code, so the list
+    // grammar answers first.
+    if (listItem(line) !== null)
+        return "prose";
+    // A marker with nothing after it is the quote's own blank line.
+    if (QUOTE_START_RE.test(line))
+        return isBlankLine(line.replace(QUOTE_MARKER_RE, "")) ? "verbatim" : "quote";
+    if (isBlankLine(line)
+            || ATX_HEADING_RE.test(line)
+            || THEMATIC_BREAK_RE.test(line)
+            || SETEXT_UNDERLINE_RE.test(line)
+            || TABLE_ROW_RE.test(line)
+            || TABLE_DELIMITER_RE.test(line)
+            || REFERENCE_DEFINITION_RE.test(line)
+            || INDENTED_CODE_RE.test(line))
+        return "verbatim";
+    return "prose";
+}
+
+// A line joins the block above it when that block runs on, the line it would
+// join did not end in a deliberate break, and the line is wrapped prose rather
+// than the start of the next thing.
+function continuesBlock(kind, previous, line) {
+    if (kind === "verbatim" || HARD_BREAK_RE.test(withoutCarriageReturn(previous)))
+        return false;
+    if (kind === "quote") {
+        // Inside a quote the marker travels down the wrapped lines, so what
+        // the marker carries is what decides.
+        var quoted = quoteLine(line);
+        if (quoted !== null)
+            return !isBlankLine(quoted.content) && !startsOwnBlock(quoted.content);
+        return !startsOwnBlock(line);
+    }
+    return !startsOwnBlock(line);
+}
+
+// Join each block's wrapped lines onto its first line, keeping a note of where
+// every source line's text ended up so a caret or a selection comes out of the
+// rewrite on the same word.
+function unwrapLines(lines, atDocumentStart) {
+    var out = [];
+    var map = [];
+    var fence = null;
+    // Front matter is not Markdown, so whatever is between the fences keeps
+    // its own lines.
+    var frontMatter = atDocumentStart && lines.length > 0 && FRONT_MATTER_RE.test(lines[0]);
+    var kind = null;
+    var previous = "";
+
+    function keep(line) {
+        map.push({ line: out.length, base: 0, strip: 0 });
+        out.push(line);
+        kind = blockKind(line);
+        previous = line;
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+
+        if (frontMatter) {
+            keep(line);
+            kind = null;
+            if (i > 0 && FRONT_MATTER_RE.test(line))
+                frontMatter = false;
+            continue;
+        }
+
+        var fenceMatch = line.match(FENCE_RE);
+        if (fence !== null) {
+            keep(line);
+            kind = null;
+            // A fence closes on a run of the same character at least as long
+            // as the one that opened it.
+            if (fenceMatch && fenceMatch[1].charAt(0) === fence.charAt(0)
+                    && fenceMatch[1].length >= fence.length)
+                fence = null;
+            continue;
+        }
+        if (fenceMatch) {
+            fence = fenceMatch[1];
+            keep(line);
+            kind = null;
+            continue;
+        }
+
+        if (kind !== null && continuesBlock(kind, previous, line)) {
+            var index = out.length - 1;
+            var head = out[index].replace(/[ \t\r]+$/, "");
+            var tail = line.replace(kind === "quote" ? QUOTE_MARKER_RE : /^[ \t]*/, "");
+            map.push({ line: index, base: head.length + 1, strip: line.length - tail.length });
+            out[index] = head + " " + tail;
+            previous = line;
+            continue;
+        }
+
+        keep(line);
+    }
+
+    return { lines: out, map: map };
+}
+
+// Where a document position lands once its line has been joined onto another:
+// the same distance into its own text, which the join moved but did not cut.
+function unwrappedPosition(doc, region, result, position) {
+    var line = Math.max(region.start, Math.min(region.end, lineIndexAt(doc, position)));
+    var entry = result.map[line - region.start];
+    var column = position - doc.starts[line];
+    var mapped = entry.base + Math.max(0, column - entry.strip);
+    return offsetInLines(result.lines, entry.line,
+                         Math.min(mapped, result.lines[entry.line].length));
+}
+
+// With a selection, the selected lines are unwrapped; without one the whole
+// document is, which is what a pasted file needs and what a single undo puts
+// back.
+function unwrapPlan(text, selectionStart, selectionEnd) {
+    var from = Math.min(selectionStart, selectionEnd);
+    var to = Math.max(selectionStart, selectionEnd);
+    var doc = documentLines(text);
+    var region;
+    if (from === to) {
+        region = { start: 0, end: doc.lines.length - 1 };
+    } else {
+        var firstLine = lineIndexAt(doc, from);
+        var lastLine = lineIndexAt(doc, to);
+        // A selection ending exactly at a line start stops on the line before it.
+        if (lastLine > firstLine && doc.starts[lastLine] === to)
+            lastLine--;
+        region = { start: firstLine, end: lastLine };
+    }
+
+    var result = unwrapLines(doc.lines.slice(region.start, region.end + 1),
+                             region.start === 0);
+    var plan = linesPlan(doc, region, result.lines,
+                         unwrappedPosition(doc, region, result, from),
+                         unwrappedPosition(doc, region, result, to));
+    if (plan === null)
+        return null;
+    plan.joinedLines = (region.end - region.start + 1) - result.lines.length;
+    return plan;
+}

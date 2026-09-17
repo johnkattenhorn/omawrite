@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFileSystemWatcher>
 #include <QString>
+#include <QTextCursor>
 #include <QTimer>
 #include <QUrl>
 #include <QVariantList>
@@ -140,6 +141,11 @@ public:
     Q_INVOKABLE QString saveClipboardImage();
     Q_INVOKABLE QString clipboardUrl() const;
     Q_INVOKABLE QString clipboardText() const;
+    // One edit for undo, however many the editor makes inside it. An unwrap
+    // rewrites a whole document as a remove and an insert, and a Ctrl+Z that
+    // landed between the two would show an empty page.
+    Q_INVOKABLE void beginUndoBlock();
+    Q_INVOKABLE void endUndoBlock();
     Q_INVOKABLE bool editorTextChanged();
     Q_INVOKABLE QVariantList hiddenRangesAt(int position) const;
     Q_INVOKABLE void setSearchHighlight(const QString &query, int currentMatchStart);
@@ -242,6 +248,7 @@ private:
     WorkspaceSession *m_workspaceSession = nullptr;
     QString m_workspaceWindowId;
     QPointer<QTextDocument> m_document;
+    QTextCursor m_undoBlock;
     QPointer<QWindow> m_parentWindow;
     QPointer<MarkdownHighlighter> m_highlighter;
     QPointer<PreviewDocument> m_previewDocument;

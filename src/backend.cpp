@@ -1058,6 +1058,22 @@ QString Backend::saveClipboardImage() {
     return relativePath;
 }
 
+// The block lives on a cursor but belongs to the document: everything the
+// editor's own cursors do while it is open lands in one undo command.
+void Backend::beginUndoBlock() {
+    if (!m_document || !m_undoBlock.isNull())
+        return;
+    m_undoBlock = QTextCursor(m_document);
+    m_undoBlock.beginEditBlock();
+}
+
+void Backend::endUndoBlock() {
+    if (m_undoBlock.isNull())
+        return;
+    m_undoBlock.endEditBlock();
+    m_undoBlock = QTextCursor();
+}
+
 QString Backend::clipboardUrl() const {
     const QClipboard *clipboard = QGuiApplication::clipboard();
     if (!clipboard)

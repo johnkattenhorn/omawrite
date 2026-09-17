@@ -10,13 +10,13 @@ drive.
 
 ## Where it is
 
-Branch `custom`, 92 commits ahead of `origin/master` (upstream `8f98892`).
-103 tests pass. Clean build, no warnings. Pushed to
+Branch `custom`, 105 commits ahead of `origin/master` (upstream `8f98892`).
+112 tests pass. Clean build, no warnings. Pushed to
 [johnkattenhorn/omawrite](https://github.com/johnkattenhorn/omawrite).
 
 ```sh
 ./bin/build    # build/omawrite
-./bin/test     # 103 passing
+./bin/test     # 112 passing
 ```
 
 ## What is in it
@@ -46,6 +46,15 @@ Written here:
   which is the only shape #68's preview sandbox will load.
 - **Command line** — `--open FILE[:LINE] [--tab]` over the session bus,
   `--append FILE` from stdin, `--list-tabs` from the session file.
+- **Copy on select** — let go of a mouse selection and it is on the clipboard,
+  the way a terminal does it, with a line in the footer that fades. A
+  `PointHandler` does the watching; `Ctrl+Shift+C` turns it off, persisted under
+  the `editor` settings category.
+- **Unwrap hard-wrapped lines** (`Ctrl+Shift+J`) — pasted text wrapped at a
+  column goes back to one line per paragraph, leaving every newline that means
+  something: blank lines, list items, quotes, tables, headings, fences,
+  indented code, front matter, and the two-space hard break. Selection first,
+  whole document when there is none.
 - **Preview scroll sync** — the toggle used to drop the reader at the top.
 - **Link hover** — reworked from #8 onto #40's existing hover, rather than
   adding a third MouseArea over the editor.

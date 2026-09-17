@@ -2,6 +2,37 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-17 — Copy on select watches the pointer, not the selection
+
+Copying when `selectedText` changes would copy while a Shift+arrow selection is
+still being extended, so the clipboard would hold every prefix of it in turn.
+The copy happens when the left button comes back up instead, which is what a
+terminal does and what a hand doing it expects.
+
+The editor's own `MouseArea` cannot see that release. It passes the press
+through (`mouse.accepted = false`) so the `TextEdit` can select, and passing the
+press through means the release goes elsewhere too. A `PointHandler` only takes
+a passive grab, so it reports press and release while the `TextEdit` runs the
+selection underneath it.
+
+`Ctrl+Shift+C` turns it off, under the `editor` settings category, because a
+clipboard that changes without being asked is worth being able to refuse.
+
+## 2026-09-17 — Unwrapping reads Markdown rather than counting blank lines
+
+`Ctrl+Shift+J` joins hard-wrapped prose back onto one line. The naive version —
+join every line that is not blank — eats the newlines that carry meaning, so the
+walk in `EditorMutations.js` keeps a block's own lines wherever Markdown reads
+them as structure: list items, quote markers, table rows, headings and the
+underline that makes one, thematic breaks, fenced and indented code, link
+reference definitions, YAML or TOML front matter at the top of the file, and a
+line ending in two spaces, which is Markdown's own line break.
+
+It also rewrites in one undo step. `replaceRange()` is a remove and an insert,
+and on a whole document that leaves a `Ctrl+Z` between them showing an empty
+page. `Backend::beginUndoBlock()` opens a `QTextCursor` edit block on the
+attached document so both land in one undo command.
+
 ## 2026-09-17 — Opening replaces the active tab; only `Ctrl+T` adds one
 
 #22 gives a sidebar you browse with. #60 gives tabs. Both answer an open, and

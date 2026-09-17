@@ -9,7 +9,7 @@ A dead-simple Markdown writing app built with Qt Quick and C++ that automaticall
 > focus mode, image paste, and a command line that reaches the running window
 > over D-Bus.
 >
-> 102 commits, 108 tests. Merging those pull requests meant reconciling
+> 105 commits, 112 tests. Merging those pull requests meant reconciling
 > contributors' designs rather than resolving conflict markers, and
 > [`docs/DECISIONS.md`](docs/DECISIONS.md) records the calls that are not
 > obvious from the diff. [`docs/STATUS.md`](docs/STATUS.md) says what was taken,
@@ -80,6 +80,16 @@ window is closed while `--open` does not.
 - `Ctrl+Click` or `Ctrl+Enter` follows a link: Obsidian `[[wikilinks]]` open the note in Omawrite, `https://` and markdown `[text](url)` links open in the browser.
 - Hovering a link names its destination above the footer, so you can read where
   it goes before deciding to follow it.
+- Selecting with the mouse copies. Let go of the drag and what was highlighted
+  is on the clipboard, the way a terminal does it, and the footer says how many
+  characters for a moment. `Ctrl+Shift+C` turns it off and on, and it stays as
+  you left it.
+- `Ctrl+Shift+J` unwraps hard-wrapped lines: text pasted out of a mail client or
+  a file wrapped at 72 columns goes back to one line per paragraph. It leaves
+  blank lines, list items, table rows, headings, fenced and indented code, front
+  matter and Markdown's own two-space line break where they are. With a
+  selection it takes the selected lines, without one the whole document, and
+  `Ctrl+Z` puts it back in a single step.
 - `Ctrl+V` pastes an image from the clipboard: it is written to an `images` folder
   beside the document and referred to by a relative path, which the preview renders.
 - `Ctrl++` and `Ctrl+-` adjust the editor text size. `Ctrl+=` also increases it,

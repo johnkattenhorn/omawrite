@@ -62,6 +62,14 @@ ApplicationWindow {
         property int editorColumns: 65
     }
 
+    // Copy on select, the way a terminal does it. Persisted, because someone
+    // who turns it off means it.
+    Settings {
+        id: editorSettings
+        category: "editor"
+        property bool copyOnSelect: true
+    }
+
     // If the work reached neither its file nor a draft there is nowhere left
     // to put it, so the first close is refused and says so; a second one is
     // taken as meaning it.
@@ -223,6 +231,41 @@ ApplicationWindow {
             return false
         }
         return false
+    }
+
+    // A line the footer shows for a moment: the app did something that was
+    // never typed as a command — a copy off a drag, an unwrap — and this is how
+    // it says so without leaving anything behind to read later.
+    property string notice: ""
+
+    function flashNotice(text) {
+        notice = text;
+        noticeTimer.restart();
+    }
+
+    Timer {
+        id: noticeTimer
+        interval: 1800
+        onTriggered: win.notice = ""
+    }
+
+    // The selection a drag just finished with, on the clipboard before the
+    // hand has left the mouse. Ctrl+C still works the same; this only saves
+    // reaching for it.
+    function copySelectionOnRelease(source) {
+        if (!editorSettings.copyOnSelect)
+            return;
+        var selected = source.selectedText;
+        if (selected.length === 0)
+            return;
+        source.copy();
+        flashNotice(selected.length === 1 ? "Copied 1 character"
+                                          : "Copied " + selected.length + " characters");
+    }
+
+    function setCopyOnSelect(enabled) {
+        editorSettings.copyOnSelect = enabled;
+        flashNotice(enabled ? "Copy on select on" : "Copy on select off");
     }
 
     function toggleFullScreen() {
@@ -484,6 +527,21 @@ ApplicationWindow {
     }
 
     Shortcut {
+        objectName: "unwrapShortcut"
+        sequence: "Ctrl+Shift+J"
+        context: Qt.WindowShortcut
+        enabled: !win.previewVisible
+        onActivated: editor.unwrapWrappedLines()
+    }
+
+    Shortcut {
+        objectName: "copyOnSelectShortcut"
+        sequence: "Ctrl+Shift+C"
+        context: Qt.WindowShortcut
+        onActivated: win.setCopyOnSelect(!editorSettings.copyOnSelect)
+    }
+
+    Shortcut {
         sequences: ["Ctrl+Return", "Ctrl+Enter"]
         context: Qt.WindowShortcut
         onActivated: followLinkAt(editor.cursorPosition)
@@ -671,7 +729,7 @@ ApplicationWindow {
         x: Math.round((win.width - width) / 2)
         y: Math.round((win.height - height) / 2)
         contentItem: Label {
-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+/  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
+            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Shift+J  Unwrap hard-wrapped lines\nCtrl+Shift+C  Copy on select on/off\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+/  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
             lineHeight: 1.5
         }
     }
@@ -1198,6 +1256,18 @@ ApplicationWindow {
                     }
                 }
 
+                // The copy happens when the button comes back up, so a drag
+                // still ends where it ended. A PointHandler only takes a
+                // passive grab, which leaves the TextEdit running the
+                // selection itself; a MouseArea that passed the press through
+                // would never see the release.
+                PointHandler {
+                    objectName: "selectionCopier"
+                    enabled: editorSettings.copyOnSelect
+                    acceptedButtons: Qt.LeftButton
+                    onActiveChanged: if (!active) win.copySelectionOnRelease(editor)
+                }
+
                 function replaceSelectionWith(replacement) {
                     var start = Math.min(selectionStart, selectionEnd);
                     var end = Math.max(selectionStart, selectionEnd);
@@ -1228,6 +1298,31 @@ ApplicationWindow {
                     } else {
                         EditorMutations.replaceRange(editor, start, end, markdown);
                     }
+                }
+
+                // Hard-wrapped text reads as paragraphs and edits as a
+                // column of lines. This joins each wrapped paragraph back onto
+                // one line: the selected ones, or the whole document when
+                // nothing is selected. One undo puts it back.
+                function unwrapWrappedLines() {
+                    forceActiveFocus();
+                    var plan = EditorMutations.unwrapPlan(text, selectionStart, selectionEnd);
+                    if (!plan) {
+                        win.flashNotice("Nothing wrapped here");
+                        return;
+                    }
+                    // One undo step for the lot: the rewrite is a remove and
+                    // an insert, and a Ctrl+Z between them would leave an
+                    // empty page.
+                    backend.beginUndoBlock();
+                    try {
+                        applyPlan(plan);
+                    } finally {
+                        backend.endUndoBlock();
+                    }
+                    win.flashNotice(plan.joinedLines === 1
+                                    ? "Unwrapped 1 line"
+                                    : "Unwrapped " + plan.joinedLines + " lines");
                 }
 
                 function applyPlan(plan) {
@@ -1664,6 +1759,14 @@ ApplicationWindow {
                 renderType: editor.renderType
                 onWidthChanged: backend.setPreviewWidth(width)
                 onLinkActivated: function(link) { backend.openExternalUrl(link) }
+
+                PointHandler {
+                    objectName: "previewSelectionCopier"
+                    enabled: editorSettings.copyOnSelect
+                    acceptedButtons: Qt.LeftButton
+                    onActiveChanged: if (!active) win.copySelectionOnRelease(preview)
+                }
+
                 Component.onCompleted: {
                     backend.attachPreviewDocument(textDocument);
                     backend.setPreviewWidth(width);
@@ -1763,7 +1866,29 @@ ApplicationWindow {
                 }
             }
 
+            // What just happened without being asked for, beside the count
+            // it will fade back to. It fades rather than disappears so the eye
+            // catches it at the edge of the page without being pulled there.
             Label {
+                id: noticeLabel
+                objectName: "footerNotice"
+                anchors.right: wordCountLabel.left
+                anchors.bottom: parent.bottom
+                anchors.rightMargin: 16
+                anchors.bottomMargin: 10
+                text: win.notice
+                color: win.mutedColor
+                opacity: win.notice.length > 0 ? 0.9 : 0
+                font.family: "iA Writer Mono S"
+                font.pixelSize: win.scaledSize(11)
+
+                Behavior on opacity {
+                    NumberAnimation { duration: 180; easing.type: Easing.OutQuad }
+                }
+            }
+
+            Label {
+                id: wordCountLabel
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 anchors.rightMargin: 12

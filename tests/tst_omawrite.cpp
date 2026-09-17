@@ -458,6 +458,186 @@ private slots:
         QVERIFY(!pressReturn(QStringLiteral("just text"), 9));
     }
 
+    void unwrapsHardWrappedLines() {
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> editor(createListEditor(component));
+        QVERIFY2(editor, qPrintable(component.errorString()));
+
+        const auto unwrap = [&](const QString &source, int from, int to) {
+            QVariant handled;
+            QMetaObject::invokeMethod(editor.data(), "unwrap",
+                                      Q_RETURN_ARG(QVariant, handled),
+                                      Q_ARG(QVariant, source), Q_ARG(QVariant, from),
+                                      Q_ARG(QVariant, to));
+            return handled.toBool();
+        };
+        const auto result = [&] { return editor->property("resultText").toString(); };
+        const auto caret = [&] { return editor->property("resultCursor").toInt(); };
+
+        // With no selection the whole document is unwrapped, and the blank
+        // line between paragraphs is what tells them apart.
+        QVERIFY(unwrap(QStringLiteral("This is a line\nthat was wrapped\nat 72 columns.\n\nA second\nparagraph."),
+                       0, 0));
+        QCOMPARE(result(), QStringLiteral("This is a line that was wrapped at 72 columns.\n\nA second paragraph."));
+
+        // A line already on its own is left where it is, plan and all.
+        QVERIFY(!unwrap(QStringLiteral("One line.\n\nAnother line."), 0, 0));
+
+        // Each list item keeps its line; the text wrapped under one comes up
+        // to join it.
+        QVERIFY(unwrap(QStringLiteral("- item one that\n  wrapped over\n- item two\n1. ordered one\n   wrapped too"), 0, 0));
+        QCOMPARE(result(), QStringLiteral("- item one that wrapped over\n- item two\n1. ordered one wrapped too"));
+
+        // Headings, the underline that makes one, thematic breaks and table
+        // rows are structure rather than wrapped prose.
+        QVERIFY(unwrap(QStringLiteral("# Heading\ntext under it\nwrapped here\n\nTitle\n=====\n\n| a | b |\n|---|---|\n| 1 | 2 |"), 0, 0));
+        QCOMPARE(result(), QStringLiteral("# Heading\ntext under it wrapped here\n\nTitle\n=====\n\n| a | b |\n|---|---|\n| 1 | 2 |"));
+
+        // Code keeps every line it was given, fenced or indented.
+        QVERIFY(!unwrap(QStringLiteral("```\nfirst line\nsecond line\n```\n\n    indented one\n    indented two"), 0, 0));
+
+        // Front matter is not Markdown, so its fields stay on their own lines.
+        QVERIFY(unwrap(QStringLiteral("---\ntitle: Thing\ntags: [a, b]\n---\n\nbody one\nbody two"), 0, 0));
+        QCOMPARE(result(), QStringLiteral("---\ntitle: Thing\ntags: [a, b]\n---\n\nbody one body two"));
+
+        // Two trailing spaces are Markdown's own line break: the break the
+        // writer asked for survives.
+        QVERIFY(unwrap(QStringLiteral("a deliberate break  \nand then some\nwrapped text"), 0, 0));
+        QCOMPARE(result(), QStringLiteral("a deliberate break  \nand then some wrapped text"));
+
+        // A quote's wrapped lines join under one marker; a bare marker is the
+        // blank line of the quote and stays.
+        QVERIFY(unwrap(QStringLiteral("> quoted one\n> quoted two\n>\n> second part\n> wrapped"), 0, 0));
+        QCOMPARE(result(), QStringLiteral("> quoted one quoted two\n>\n> second part wrapped"));
+
+        // A selection unwraps the lines it touches and nothing else.
+        QVERIFY(unwrap(QStringLiteral("a one\ntwo three\n\nb one\nb two"), 0, 8));
+        QCOMPARE(result(), QStringLiteral("a one two three\n\nb one\nb two"));
+
+        // The caret comes out of the rewrite on the word it went in on: the
+        // "d" of "delta", which the join moved from 17 in the source to 17 in
+        // one line of prose.
+        QVERIFY(unwrap(QStringLiteral("alpha beta\ngamma delta"), 17, 17));
+        QCOMPARE(result(), QStringLiteral("alpha beta gamma delta"));
+        QCOMPARE(caret(), 17);
+    }
+
+    void unwrapsFromTheEditorKeys() {
+        Backend backend;
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> created(createMainWindow(engine, component, backend));
+        QVERIFY2(created, qPrintable(component.errorString()));
+
+        QQuickWindow *window = qobject_cast<QQuickWindow *>(created.data());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+        // Typed in rather than assigned, so undo has the wrapped text to go
+        // back to the way it does after a paste.
+        QVERIFY(QMetaObject::invokeMethod(editor, "insert", Q_ARG(int, 0),
+                                          Q_ARG(QString, QStringLiteral("one line\nwrapped over\n\nanother\nwrapped"))));
+        QVERIFY(QMetaObject::invokeMethod(editor, "forceActiveFocus"));
+
+        QTest::keyClick(window, Qt::Key_J, Qt::ControlModifier | Qt::ShiftModifier);
+        QCOMPARE(editor->property("text").toString(),
+                 QStringLiteral("one line wrapped over\n\nanother wrapped"));
+
+        // The footer says what happened, and one undo puts the lines back.
+        QObject *notice = window->findChild<QObject *>(QStringLiteral("footerNotice"));
+        QVERIFY(notice);
+        QCOMPARE(notice->property("text").toString(), QStringLiteral("Unwrapped 2 lines"));
+
+        QVERIFY(QMetaObject::invokeMethod(editor, "undo"));
+        QCOMPARE(editor->property("text").toString(),
+                 QStringLiteral("one line\nwrapped over\n\nanother\nwrapped"));
+    }
+
+    void copiesTheSelectionWhenTheDragEnds() {
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        QVERIFY(clipboard);
+        clipboard->clear();
+
+        Backend backend;
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> created(createMainWindow(engine, component, backend));
+        QVERIFY2(created, qPrintable(component.errorString()));
+
+        QQuickWindow *window = qobject_cast<QQuickWindow *>(created.data());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        QQuickItem *editor = window->findChild<QQuickItem *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+        editor->setProperty("text", QStringLiteral("hello there"));
+        QVERIFY(QMetaObject::invokeMethod(editor, "forceActiveFocus"));
+
+        const QPointF start = editor->mapToScene(QPointF(1, editor->height() > 8 ? 8 : 1));
+        const QPointF end = editor->mapToScene(QPointF(60, editor->height() > 8 ? 8 : 1));
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, start.toPoint());
+        QTest::mouseMove(window, end.toPoint());
+        QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, end.toPoint());
+
+        const QString selected = editor->property("selectedText").toString();
+        QVERIFY(!selected.isEmpty());
+        QTRY_COMPARE(clipboard->text(), selected);
+
+        QObject *notice = window->findChild<QObject *>(QStringLiteral("footerNotice"));
+        QVERIFY(notice);
+        QCOMPARE(notice->property("text").toString(),
+                 QStringLiteral("Copied %1 characters").arg(selected.length()));
+
+        clipboard->clear();
+    }
+
+    void leavesTheClipboardAloneWhenCopyOnSelectIsOff() {
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        QVERIFY(clipboard);
+        clipboard->setText(QStringLiteral("something else"));
+
+        Backend backend;
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> created(createMainWindow(engine, component, backend));
+        QVERIFY2(created, qPrintable(component.errorString()));
+
+        QQuickWindow *window = qobject_cast<QQuickWindow *>(created.data());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QObject *copier = window->findChild<QObject *>(QStringLiteral("selectionCopier"));
+        QVERIFY(editor);
+        QVERIFY(copier);
+        editor->setProperty("text", QStringLiteral("hello there"));
+        QVERIFY(QMetaObject::invokeMethod(editor, "select", Q_ARG(int, 0), Q_ARG(int, 5)));
+
+        // Ctrl+Shift+C turns it off, the handler goes with it, and a release
+        // with a selection leaves the clipboard where it was.
+        QTest::keyClick(window, Qt::Key_C, Qt::ControlModifier | Qt::ShiftModifier);
+        QCOMPARE(copier->property("enabled").toBool(), false);
+        QVERIFY(QMetaObject::invokeMethod(window, "copySelectionOnRelease",
+                                          Q_ARG(QVariant, QVariant::fromValue(editor))));
+        QCOMPARE(clipboard->text(), QStringLiteral("something else"));
+
+        QObject *notice = window->findChild<QObject *>(QStringLiteral("footerNotice"));
+        QVERIFY(notice);
+        QCOMPARE(notice->property("text").toString(), QStringLiteral("Copy on select off"));
+
+        // And back on, which copies what is already selected on the next release.
+        QTest::keyClick(window, Qt::Key_C, Qt::ControlModifier | Qt::ShiftModifier);
+        QCOMPARE(copier->property("enabled").toBool(), true);
+        QVERIFY(QMetaObject::invokeMethod(window, "copySelectionOnRelease",
+                                          Q_ARG(QVariant, QVariant::fromValue(editor))));
+        QCOMPARE(clipboard->text(), QStringLiteral("hello"));
+
+        clipboard->clear();
+    }
+
     void indentsListsFromTheEditorKeys() {
         Backend backend;
         QQmlEngine engine;
@@ -3803,6 +3983,15 @@ private:
                     cursorPosition = cursor;
                     return edit(EditorMutations.returnPlan(source, cursor, cursor),
                                 source, cursor);
+                }
+
+                function unwrap(source, from, to) {
+                    text = source;
+                    if (from === to)
+                        cursorPosition = from;
+                    else
+                        select(from, to);
+                    return edit(EditorMutations.unwrapPlan(source, from, to), source, from);
                 }
         )QML", QStringLiteral("ListHarness"));
     }
