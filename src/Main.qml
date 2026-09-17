@@ -505,6 +505,15 @@ ApplicationWindow {
         onActivated: win.moveSearch(1)
     }
 
+    Shortcut {
+        sequence: "Ctrl+Shift+T"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            backend.updateCursorPosition(editor.cursorPosition);
+            backend.toggleFocusMode();
+        }
+    }
+
     Connections {
         target: backend
 
@@ -580,7 +589,9 @@ ApplicationWindow {
         modal: true
         title: "Keyboard shortcuts"
         standardButtons: Dialog.Close
-        anchors.centerIn: parent
+        width: Math.min(win.scaledSize(380), win.width - 48)
+        x: Math.round((win.width - width) / 2)
+        y: Math.round((win.height - height) / 2)
         contentItem: Label {
             text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
             lineHeight: 1.5
@@ -946,6 +957,12 @@ ApplicationWindow {
             // Keep the editing caret within the viewport so writing past the
             // bottom edge scrolls the page along with the text.
             function ensureCursorVisible() {
+                if (backend.focusMode) {
+                    var cursorCenter = editor.y + editor.cursorRectangle.y
+                        + editor.cursorRectangle.height / 2;
+                    scrollTo(clampContentY(cursorCenter - height / 2));
+                    return;
+                }
                 var margin = win.editorFontPixelSize * 2;
                 var cursorTop = editor.y + editor.cursorRectangle.y;
                 var cursorBottom = cursorTop + editor.cursorRectangle.height;

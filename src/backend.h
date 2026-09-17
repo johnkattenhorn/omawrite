@@ -48,6 +48,7 @@ class Backend : public QObject {
     Q_PROPERTY(QString folderName READ folderName NOTIFY folderChanged)
     Q_PROPERTY(bool folderHasParent READ folderHasParent NOTIFY folderChanged)
     Q_PROPERTY(QVariantList folderEntries READ folderEntries NOTIFY folderChanged)
+    Q_PROPERTY(bool focusMode READ focusMode NOTIFY focusModeChanged)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -88,6 +89,7 @@ public:
     QString folderName() const;
     bool folderHasParent() const;
     QVariantList folderEntries() const;
+    bool focusMode() const { return m_focusMode; }
     static int countWords(const QString &text);
     static QString normalizedLinkUrl(const QString &clipboardText);
     static QString suggestedFileName(const QString &text);
@@ -143,6 +145,8 @@ public:
     void refreshBuffers();
     Q_INVOKABLE QVariantMap windowGeometry() const;
     Q_INVOKABLE void saveWindowGeometry(int x, int y, int width, int height, bool maximized);
+    Q_INVOKABLE void toggleFocusMode();
+    Q_INVOKABLE void updateCursorPosition(int position);
 
 signals:
     void fileUrlChanged();
@@ -166,6 +170,7 @@ signals:
     void newWindowRequested();
     void openTabRequested(const QString &tabId);
     void windowEmptied();
+    void focusModeChanged();
 
 private:
     void initializeRuntime();
@@ -239,6 +244,7 @@ private:
     bool m_ignoringInitialCursorReset = false;
     QString m_recoveryPath;
     std::unique_ptr<QLockFile> m_recoveryLock;
+    bool m_focusMode = false;
 
     QString m_themeBackground;
     QString m_themeForeground;

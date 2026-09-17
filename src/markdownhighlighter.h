@@ -14,6 +14,8 @@ public:
     void setColors(const QString &background, const QString &foreground, const QString &accent);
     void setSearch(const QString &query, int currentMatchStart);
     void setTextScale(qreal textScale);
+    void setFocusMode(bool enabled);
+    void setFocusCursorPosition(int position);
 
     struct Span {
         int start;
@@ -50,6 +52,7 @@ private:
     void highlightMarkers(const QString &text);
     void highlightInline(const QString &text);
     void highlightSearch(const QString &text);
+    void applyFocusDimming(const QString &text);
 
     bool m_darkMode = true;
     QString m_customBackground;
@@ -72,4 +75,7 @@ private:
     qreal m_headingSizes[6];
     QTextCharFormat m_searchFormat;
     QTextCharFormat m_currentSearchFormat;
+    bool m_focusMode = false;
+    int m_focusCursorPosition = -1;
+    QColor m_dimmedColor;
 };

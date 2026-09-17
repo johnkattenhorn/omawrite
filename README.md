@@ -35,6 +35,7 @@ Install via the Omarchy Package Repository via the `omawrite` package. It's inst
   beside the document and referred to by a relative path, which the preview renders.
 - `Ctrl++` and `Ctrl+-` adjust the editor text size. `Ctrl+=` also increases it,
   and `Ctrl+0` resets it to the original size.
+- `Ctrl+Shift+T` toggles focus mode: typewriter scrolling and paragraph dimming.
 - `Ctrl+?` shows the keyboard shortcut reference.
 
 ## Sidebar
