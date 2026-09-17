@@ -184,6 +184,9 @@ private:
     void initializeRuntime();
     void openPath(const QUrl &url, bool mayStartNewFile);
     void loadDocumentText(const QString &text);
+    // Take the newer text without asking, for a document holding no local
+    // changes. The caret keeps its place.
+    void reloadSilently();
     void loadActiveBuffer();
     void persistActiveBuffer();
     void setFileUrl(const QUrl &url);

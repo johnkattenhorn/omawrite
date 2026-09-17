@@ -286,6 +286,18 @@ void Backend::initializeRuntime() {
                     }
                 }
 
+                // Nothing of theirs is at stake when the document has no local
+                // changes, so an outside edit is simply the newer text. Taking
+                // it without asking is what makes a second writer workable: an
+                // agent, a sync client, another window. A deletion still asks,
+                // because losing the file is not the same as being handed a
+                // newer version of it.
+                if (!deleted && !m_modified) {
+                    reloadSilently();
+                    watchCurrentFile();
+                    return;
+                }
+
                 m_externalChangePending = true;
                 emit externalChangeDetected(deleted, m_modified);
                 // A replacement leaves the old inode behind, and the path with
@@ -766,6 +778,41 @@ void Backend::fileDialogCanceled() {
 
 void Backend::discardRecovery() {
     clearRecovery();
+}
+
+void Backend::reloadSilently() {
+    QFile file(m_fileUrl.toLocalFile());
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return;
+
+    const QByteArray contents = file.readAll();
+    const QString text = QString::fromUtf8(contents);
+
+    // The caret is the reader's place in the document, so it survives the
+    // reload rather than snapping to the top of text they did not ask for.
+    // Clamped, because the newer version may be shorter than where they were.
+    const int caret = qBound(0, m_cursorPosition, int(text.size()));
+
+    m_lastKnownFileContents = contents;
+    m_hasKnownFileContents = true;
+    m_externalChangePending = false;
+
+    if (m_workspaceSession) {
+        m_workspaceSession->updateTab(m_workspaceWindowId, activeBufferId(), m_fileUrl,
+                                      text, caret, caret, caret, false);
+        m_workspaceSession->setExternalChange(activeBufferId(), false);
+        m_workspaceSession->saveNow();
+    } else {
+        m_bufferSession.updateBuffer(m_bufferSession.activeBufferId(), m_fileUrl.toString(),
+                                     text, caret, caret, caret, false);
+        m_bufferSession.saveNow();
+    }
+
+    loadActiveBuffer();
+    clearRecovery();
+    emit buffersChanged();
+    emit activeBufferChanged();
+    setStatus(QStringLiteral("Updated %1 from disk").arg(fileName()));
 }
 
 void Backend::reloadFromDisk() {

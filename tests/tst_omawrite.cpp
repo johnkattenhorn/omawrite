@@ -207,7 +207,12 @@ private slots:
         QVERIFY(changedContents.open(QIODevice::WriteOnly | QIODevice::Truncate));
         QCOMPARE(changedContents.write("changed elsewhere"), qint64(17));
         changedContents.close();
-        QTRY_COMPARE(externalChangeSpy.count(), 1);
+
+        // Someone else's write is noticed, and with no local changes to weigh it
+        // against it is taken rather than asked about. What lands in the editor
+        // is covered by takesAnOutsideEditWhenNothingLocalIsAtStake.
+        QTest::qWait(200);
+        QCOMPARE(externalChangeSpy.count(), 0);
     }
 
     void listsOnlyDocumentsAndFolders() {
@@ -1127,7 +1132,19 @@ private slots:
         seed.close();
 
         Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
         backend.open(QUrl::fromLocalFile(path));
+        // Local changes are what makes an outside edit a conflict at all.
+        editor->setProperty("text", QStringLiteral("mine, unsaved"));
+        QVERIFY(backend.modified());
 
         QSignalSpy conflict(&backend, &Backend::externalChangeDetected);
         QSaveFile outside(path);
@@ -1156,7 +1173,20 @@ private slots:
         seed.close();
 
         Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
         backend.open(QUrl::fromLocalFile(path));
+        // Local changes are what makes an outside edit a conflict at all. With
+        // none, the newer text is simply taken.
+        editor->setProperty("text", QStringLiteral("mine, unsaved"));
+        QVERIFY(backend.modified());
 
         QSignalSpy conflict(&backend, &Backend::externalChangeDetected);
 
@@ -3503,6 +3533,88 @@ private slots:
         QCOMPARE(describe({{QStringLiteral("kind"), QStringLiteral("missing")},
                            {QStringLiteral("target"), QStringLiteral("Retro")}}),
                  QStringLiteral("[[Retro]] — no note yet"));
+    }
+
+    void takesAnOutsideEditWhenNothingLocalIsAtStake() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("shared-draft.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly | QIODevice::Text));
+        seed.write("line one\nline two\nline three\n");
+        seed.close();
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+        QVERIFY(!backend.modified());
+        editor->setProperty("cursorPosition", 9);
+
+        QSignalSpy conflict(&backend, &Backend::externalChangeDetected);
+
+        // Someone else writes the file while it is open and untouched here.
+        QFile outside(path);
+        QVERIFY(outside.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text));
+        outside.write("line one\nline two edited\nline three\n");
+        outside.close();
+
+        // Taken rather than asked about, because there is nothing of theirs to
+        // weigh it against.
+        QTRY_COMPARE(editor->property("text").toString(),
+                     QStringLiteral("line one\nline two edited\nline three\n"));
+        QCOMPARE(conflict.count(), 0);
+        QVERIFY(!backend.modified());
+
+        // The caret keeps its place rather than snapping to the top of text the
+        // reader did not ask for.
+        QTRY_COMPARE(backend.activeCursorPosition(), 9);
+    }
+
+    void stillAsksWhenTheOutsideEditMeetsLocalChanges() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("contested-draft.md"));
+        QFile seed(path);
+        QVERIFY(seed.open(QIODevice::WriteOnly | QIODevice::Text));
+        seed.write("original\n");
+        seed.close();
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(path));
+        editor->setProperty("text", QStringLiteral("mine, unsaved"));
+        QVERIFY(backend.modified());
+
+        QSignalSpy conflict(&backend, &Backend::externalChangeDetected);
+        QFile outside(path);
+        QVERIFY(outside.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text));
+        outside.write("theirs\n");
+        outside.close();
+
+        // Two versions of the document now exist and only the writer can say
+        // which one survives, so this one still asks.
+        QTRY_COMPARE(conflict.count(), 1);
+        QCOMPARE(editor->property("text").toString(), QStringLiteral("mine, unsaved"));
     }
 
 private:
