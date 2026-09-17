@@ -44,6 +44,10 @@
 
 constexpr qreal typoraLineHeightPercent = 140;
 const QString lastSaveDirectorySetting = QStringLiteral("file/lastSaveDirectory");
+const QString editorFontSizeSetting = QStringLiteral("editor/fontSize");
+constexpr int defaultEditorFontSize = 20;
+constexpr int minimumEditorFontSize = 10;
+constexpr int maximumEditorFontSize = 48;
 const QString browseDirectorySetting = QStringLiteral("file/browseDirectory");
 const QString sidebarWidthSetting = QStringLiteral("window/sidebarWidth");
 
@@ -192,6 +196,10 @@ Backend::Backend(QObject *parent)
 
 Backend::Backend(const QString &stateDirectory, QObject *parent)
     : QObject(parent), m_bufferSession(stateDirectory) {
+    m_editorFontSize = qBound(minimumEditorFontSize,
+                              QSettings().value(editorFontSizeSetting,
+                                                defaultEditorFontSize).toInt(),
+                              maximumEditorFontSize);
     QDir().mkpath(stateDirectory);
     if (!m_bufferSession.restore())
         m_bufferSession.createBuffer();
@@ -228,6 +236,10 @@ Backend::Backend(const QString &stateDirectory, QObject *parent)
 Backend::Backend(WorkspaceSession *workspaceSession, const QString &windowId, QObject *parent)
     : QObject(parent), m_bufferSession(QString()), m_workspaceSession(workspaceSession),
       m_workspaceWindowId(windowId) {
+    m_editorFontSize = qBound(minimumEditorFontSize,
+                              QSettings().value(editorFontSizeSetting,
+                                                defaultEditorFontSize).toInt(),
+                              maximumEditorFontSize);
     for (const QVariant &value : buffers()) {
         const QVariantMap buffer = value.toMap();
         if (buffer.value(QStringLiteral("id")).toString() != activeBufferId())
@@ -335,6 +347,21 @@ void Backend::setTextScale(qreal textScale) {
 
     m_textScale = textScale;
     emit textScaleChanged(m_textScale);
+}
+
+void Backend::setEditorFontSize(int editorFontSize) {
+    const int boundedSize = qBound(minimumEditorFontSize, editorFontSize,
+                                   maximumEditorFontSize);
+    if (m_editorFontSize == boundedSize)
+        return;
+
+    m_editorFontSize = boundedSize;
+    QSettings().setValue(editorFontSizeSetting, m_editorFontSize);
+    emit editorFontSizeChanged();
+}
+
+void Backend::resetEditorFontSize() {
+    setEditorFontSize(defaultEditorFontSize);
 }
 
 void Backend::attachDocument(QObject *textDocument) {

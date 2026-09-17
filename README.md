@@ -33,6 +33,8 @@ Install via the Omarchy Package Repository via the `omawrite` package. It's inst
 - `Ctrl+Click` or `Ctrl+Enter` follows a link: Obsidian `[[wikilinks]]` open the note in Omawrite, `https://` and markdown `[text](url)` links open in the browser.
 - `Ctrl+V` pastes an image from the clipboard: it is written to an `images` folder
   beside the document and referred to by a relative path, which the preview renders.
+- `Ctrl++` and `Ctrl+-` adjust the editor text size. `Ctrl+=` also increases it,
+  and `Ctrl+0` resets it to the original size.
 - `Ctrl+?` shows the keyboard shortcut reference.
 
 ## Sidebar
@@ -78,6 +80,8 @@ and warns before an external change can replace local work.
 Text follows the desktop text size — `omarchy display text size`, or GNOME's
 `text-scaling-factor` — and re-flows without a restart. The default of 12px leaves
 Omawrite at the size it is designed around; larger and smaller sizes scale from there.
+Editor text size starts at 20px, changes in 2px steps from 10px to 48px, and is
+remembered across launches. Desktop text scaling is applied on top of this base size.
 
 ## Requirements
 
