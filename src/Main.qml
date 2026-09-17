@@ -244,6 +244,23 @@ ApplicationWindow {
         editorFlick.scrollTo(span > 0 ? fraction * span : 0);
     }
 
+    // What to show for the link under the pointer. A wikilink reads as it was
+    // written; a missing one says so rather than showing a path that is not
+    // there; everything else shows where it actually goes.
+    function linkLabel(link) {
+        if (!link || link.kind === "none")
+            return "";
+        if (link.kind === "missing")
+            return "[[" + link.target + "]] — no note yet";
+        if (link.target && String(link.target).length > 0
+                && link.kind === "file" && link.url !== undefined)
+            return "[[" + link.target + "]]";
+        var destination = link.url === undefined ? "" : String(link.url);
+        return destination.indexOf("file://") === 0
+            ? destination.substring(7)
+            : destination;
+    }
+
     function togglePreview() {
         // Read before the swap, applied after: toggling used to drop the reader
         // at the top of the document, which on anything long means finding your
@@ -1057,6 +1074,9 @@ ApplicationWindow {
                 font.pixelSize: win.editorFontPixelSize
                 font.weight: Font.Normal
                 property bool hoveringLink: false
+                // Where the link under the pointer goes, shown above the footer
+                // so a link can be read before it is followed.
+                property string hoveredLinkLabel: ""
                 // Native rendering hints glyphs to the pixel grid, which is
                 // crispest at whole scale factors but misplaces and unevenly
                 // rasterizes glyphs at fractional ones (and goes stale when
@@ -1096,15 +1116,24 @@ ApplicationWindow {
                     }
 
                     function updateHover(mx, my, modifiers) {
+                        var link = backend.linkAt(documentPosition(mx, my))
+                        // The cursor answers to Ctrl because Ctrl is what
+                        // follows the link; the destination is worth reading
+                        // either way, and reading it is what tells you whether
+                        // to hold Ctrl at all.
                         editor.hoveringLink = (modifiers & Qt.ControlModifier)
-                            && backend.linkAt(documentPosition(mx, my)).kind !== "none"
+                            && link.kind !== "none"
+                        editor.hoveredLinkLabel = win.linkLabel(link)
                     }
 
                     onPositionChanged: function(mouse) {
                         updateHover(mouse.x, mouse.y, mouse.modifiers)
                     }
 
-                    onExited: editor.hoveringLink = false
+                    onExited: {
+                        editor.hoveringLink = false
+                        editor.hoveredLinkLabel = ""
+                    }
 
                     onPressed: function(mouse) {
                         if ((mouse.modifiers & Qt.ControlModifier)
@@ -1586,6 +1615,35 @@ ApplicationWindow {
                     backend.attachPreviewDocument(textDocument);
                     backend.setPreviewWidth(width);
                 }
+            }
+        }
+
+        // Above the footer rather than inside it: the footer is a fixed row of
+        // controls, and a path is as long as it is. Outside the editor's own
+        // clip, so a link near the bottom edge is still readable.
+        Rectangle {
+            id: linkLabel
+            objectName: "linkLabel"
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: footer.top
+            height: visible ? linkLabelText.implicitHeight + win.scaledSize(10) : 0
+            visible: editor.hoveredLinkLabel.length > 0 && !win.previewVisible
+            color: win.pageColor
+
+            Text {
+                id: linkLabelText
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                text: editor.hoveredLinkLabel
+                elide: Text.ElideMiddle
+                color: win.mutedColor
+                opacity: 0.75
+                font.family: "iA Writer Mono S"
+                font.pixelSize: win.scaledSize(11)
             }
         }
 

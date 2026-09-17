@@ -65,6 +65,8 @@ window is closed while `--open` does not.
 - `Tab` and `Shift+Tab` nest and unnest list items. Bullets and numbers line up under
   the item above them, and ordered lists renumber themselves.
 - `Ctrl+Click` or `Ctrl+Enter` follows a link: Obsidian `[[wikilinks]]` open the note in Omawrite, `https://` and markdown `[text](url)` links open in the browser.
+- Hovering a link names its destination above the footer, so you can read where
+  it goes before deciding to follow it.
 - `Ctrl+V` pastes an image from the clipboard: it is written to an `images` folder
   beside the document and referred to by a relative path, which the preview renders.
 - `Ctrl++` and `Ctrl+-` adjust the editor text size. `Ctrl+=` also increases it,

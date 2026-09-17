@@ -3454,6 +3454,57 @@ private slots:
         QTRY_VERIFY(qAbs(fraction() - before) < 0.05);
     }
 
+    void namesTheLinkUnderThePointer() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        auto *label = window->findChild<QQuickItem *>(QStringLiteral("linkLabel"));
+        QVERIFY(label);
+        // Nothing under the pointer, nothing in the way of the writing.
+        QVERIFY(!label->property("visible").toBool());
+
+        const auto describe = [&window](const QVariantMap &link) {
+            QVariant answer;
+            QMetaObject::invokeMethod(window.data(), "linkLabel",
+                                      Q_RETURN_ARG(QVariant, answer),
+                                      Q_ARG(QVariant, QVariant::fromValue(link)));
+            return answer.toString();
+        };
+
+        QCOMPARE(describe({{QStringLiteral("kind"), QStringLiteral("none")}}), QString());
+
+        QCOMPARE(describe({{QStringLiteral("kind"), QStringLiteral("url")},
+                           {QStringLiteral("url"), QUrl(QStringLiteral("https://example.com/a"))}}),
+                 QStringLiteral("https://example.com/a"));
+
+        // A local file reads as a path, not as a file:// URL nobody types.
+        QCOMPARE(describe({{QStringLiteral("kind"), QStringLiteral("url")},
+                           {QStringLiteral("url"),
+                            QUrl::fromLocalFile(QStringLiteral("/tmp/notes/a.md"))}}),
+                 QStringLiteral("/tmp/notes/a.md"));
+
+        // A wikilink reads as it was written; one with no note behind it says so
+        // rather than showing a path that is not there.
+        QCOMPARE(describe({{QStringLiteral("kind"), QStringLiteral("file")},
+                           {QStringLiteral("url"),
+                            QUrl::fromLocalFile(QStringLiteral("/tmp/notes/Standup.md"))},
+                           {QStringLiteral("target"), QStringLiteral("Standup")}}),
+                 QStringLiteral("[[Standup]]"));
+        QCOMPARE(describe({{QStringLiteral("kind"), QStringLiteral("missing")},
+                           {QStringLiteral("target"), QStringLiteral("Retro")}}),
+                 QStringLiteral("[[Retro]] — no note yet"));
+    }
+
 private:
     // Points HOME at a scratch tree holding one colors.toml, and puts it back on the way out.
     struct ScopedTheme {
