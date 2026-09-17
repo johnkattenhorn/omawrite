@@ -25,13 +25,14 @@ public:
 
     // Ask the Omawrite that owns the name to show this file. False when nobody
     // answered, which is the caller's signal to open a window itself.
-    static bool requestOpen(const QString &path, int line);
+    static bool requestOpen(const QString &path, int line, bool newTab);
 
     explicit Remote(WindowManager *windows, QObject *parent = nullptr);
 
 public slots:
-    // Absolute path, and a 1-based line, or 0 to leave the caret alone.
-    bool OpenFile(const QString &path, int line);
+    // Absolute path, a 1-based line or 0 to leave the caret alone, and whether
+    // to open beside what is showing rather than over it.
+    bool OpenFile(const QString &path, int line, bool newTab);
 
 private:
     WindowManager *m_windows = nullptr;

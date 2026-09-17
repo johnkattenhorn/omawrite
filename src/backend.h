@@ -61,8 +61,9 @@ public:
     QWindow *parentWindow() const;
 
     // Open a file and put the caret on a 1-based line, or leave it where the
-    // tab left it when the line is 0. This is what `omawrite --open` reaches.
-    Q_INVOKABLE void openAtLine(const QUrl &url, int line);
+    // tab left it when the line is 0. With newTab the file opens beside what is
+    // showing rather than over it. This is what `omawrite --open` reaches.
+    Q_INVOKABLE void openAtLine(const QUrl &url, int line, bool newTab = false);
 
     QUrl fileUrl() const { return m_fileUrl; }
     QVariantList buffers() const { return m_workspaceSession

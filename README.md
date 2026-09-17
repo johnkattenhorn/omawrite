@@ -15,6 +15,7 @@ Install via the Omarchy Package Repository via the `omawrite` package. It's inst
 ```
 omawrite [FILE]              open a window, on FILE when there is one
 omawrite --open FILE[:LINE]  show FILE in the window already on screen
+omawrite --open FILE --tab   open it beside what is showing, not over it
 omawrite --append FILE       add stdin to the end of FILE, no window
 omawrite --list-tabs         print what the last session left open
 omawrite --help              print the usage and exit

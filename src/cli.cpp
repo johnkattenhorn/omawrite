@@ -16,7 +16,7 @@ QString Cli::usage() {
         "\n"
         "Usage:\n"
         "  omawrite [FILE]\n"
-        "  omawrite --open FILE[:LINE]\n"
+        "  omawrite --open FILE[:LINE] [--tab]\n"
         "  omawrite --append FILE\n"
         "  omawrite --list-tabs\n"
         "\n"
@@ -29,6 +29,7 @@ QString Cli::usage() {
         "  --open FILE[:LINE]  Show FILE in the window that is already open,\n"
         "                      at LINE when one is given. Starts Omawrite when\n"
         "                      nothing is running yet.\n"
+        "  --tab               Open beside what is showing rather than over it.\n"
         "  --append FILE       Add what is on standard input to the end of\n"
         "                      FILE and exit. No window opens, and a FILE that\n"
         "                      is open in a tab is updated in place.\n"
@@ -48,10 +49,11 @@ QString Cli::usage() {
         "and https://github.com/omacom-io/omawrite#shortcuts has the same list.\n");
 }
 
-Cli::Request Cli::parseTarget(Request::Kind kind, const QString &argument) {
+Cli::Request Cli::parseTarget(Request::Kind kind, const QString &argument, bool newTab) {
     Request request;
     request.kind = kind;
     request.path = argument;
+    request.newTab = newTab;
 
     // Only a trailing run of digits after a colon is a line number. Anything
     // else belongs to the name: a colon is legal in a filename, and guessing
@@ -75,16 +77,23 @@ Cli::Request Cli::parse(const QStringList &arguments) {
     Request request;
 
     const QStringList rest = arguments.mid(1);
+    // A modifier rather than a mode, so it reads the same on either side of the
+    // file it applies to.
+    const bool newTab = rest.contains(QLatin1String("--tab"));
+
     for (int index = 0; index < rest.size(); ++index) {
         const QString argument = rest.at(index);
 
+        if (argument == QLatin1String("--tab"))
+            continue;
+
         if (argument == QLatin1String("-h") || argument == QLatin1String("--help")) {
             QTextStream(stdout) << usage();
-            return {Request::Help, {}, 0, 0};
+            return {Request::Help, {}, 0, 0, false};
         }
 
         if (argument == QLatin1String("--list-tabs"))
-            return {Request::ListTabs, {}, 0, 0};
+            return {Request::ListTabs, {}, 0, 0, false};
 
         const bool wantsOpen = argument == QLatin1String("--open");
         const bool wantsAppend = argument == QLatin1String("--append");
@@ -93,13 +102,13 @@ Cli::Request Cli::parse(const QStringList &arguments) {
                 QTextStream(stderr) << QStringLiteral("omawrite: %1 needs a file\n\n")
                                            .arg(argument)
                                     << usage();
-                return {Request::Error, {}, 0, 1};
+                return {Request::Error, {}, 0, 1, false};
             }
             // --append takes the name whole: its text arrives on stdin, so a
             // line number would have nothing to mean.
             const QString target = rest.at(++index);
-            return wantsOpen ? parseTarget(Request::Open, target)
-                             : Request{Request::Append, target, 0, 0};
+            return wantsOpen ? parseTarget(Request::Open, target, newTab)
+                             : Request{Request::Append, target, 0, 0, false};
         }
 
         // A leading dash means an option was meant, not a file. Answering with
@@ -108,13 +117,14 @@ Cli::Request Cli::parse(const QStringList &arguments) {
             QTextStream(stderr) << QStringLiteral("omawrite: unrecognized option '%1'\n\n")
                                        .arg(argument)
                                 << usage();
-            return {Request::Error, {}, 0, 1};
+            return {Request::Error, {}, 0, 1, false};
         }
 
         if (request.path.isEmpty())
             request.path = argument;
     }
 
+    request.newTab = newTab;
     return request;
 }
 

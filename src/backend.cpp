@@ -525,7 +525,12 @@ void Backend::open(const QUrl &url) {
     openPath(url, true);
 }
 
-void Backend::openAtLine(const QUrl &url, int line) {
+void Backend::openAtLine(const QUrl &url, int line, bool newTab) {
+    // A fresh tab first, so the open below takes over that one rather than the
+    // document the writer is looking at.
+    if (newTab)
+        newBuffer();
+
     openPath(url, true);
     if (line <= 0 || !m_document)
         return;

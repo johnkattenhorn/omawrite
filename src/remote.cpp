@@ -40,7 +40,7 @@ bool Remote::claim(WindowManager *windows) {
     return true;
 }
 
-bool Remote::requestOpen(const QString &path, int line) {
+bool Remote::requestOpen(const QString &path, int line, bool newTab) {
     QDBusConnection bus = QDBusConnection::sessionBus();
     if (!bus.isConnected())
         return false;
@@ -49,11 +49,11 @@ bool Remote::requestOpen(const QString &path, int line) {
     if (!omawrite.isValid())
         return false;
 
-    const QDBusReply<bool> reply = omawrite.call(QStringLiteral("OpenFile"), path, line);
+    const QDBusReply<bool> reply = omawrite.call(QStringLiteral("OpenFile"), path, line, newTab);
     return reply.isValid() && reply.value();
 }
 
-bool Remote::OpenFile(const QString &path, int line) {
+bool Remote::OpenFile(const QString &path, int line, bool newTab) {
     if (!m_windows)
         return false;
 
@@ -67,7 +67,7 @@ bool Remote::OpenFile(const QString &path, int line) {
     if (!target.isAbsolute())
         return false;
 
-    backend->openAtLine(QUrl::fromLocalFile(target.absoluteFilePath()), line);
+    backend->openAtLine(QUrl::fromLocalFile(target.absoluteFilePath()), line, newTab);
 
     // Showing a file nobody can see is not showing it, so the window comes
     // forward with it.

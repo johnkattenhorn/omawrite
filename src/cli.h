@@ -27,11 +27,12 @@ struct Request {
     QString path;
     int line = 0;  // 1-based; 0 means the caret is left where it was.
     int exitCode = 0;
+    bool newTab = false;  // --tab: open beside what is showing, not over it.
 };
 
 // FILE or FILE:LINE. The line is only taken where what follows the last colon
 // is all digits, so a file whose name holds a colon still opens.
-Request parseTarget(Request::Kind kind, const QString &argument);
+Request parseTarget(Request::Kind kind, const QString &argument, bool newTab = false);
 
 Request parse(const QStringList &arguments);
 Request parse(int argc, char *argv[]);

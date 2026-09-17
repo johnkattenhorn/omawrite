@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
     // windows. Nobody there means this process is the one that opens.
     if (request.kind == Cli::Request::Open) {
         const QString absolute = QFileInfo(request.path).absoluteFilePath();
-        if (Remote::requestOpen(absolute, request.line))
+        if (Remote::requestOpen(absolute, request.line, request.newTab))
             return 0;
     }
 
@@ -109,7 +109,8 @@ int main(int argc, char *argv[]) {
 
     if (!request.path.isEmpty() && !windows.primaryBackend()->modified()) {
         windows.primaryBackend()->openAtLine(
-            QUrl::fromLocalFile(QFileInfo(request.path).absoluteFilePath()), request.line);
+            QUrl::fromLocalFile(QFileInfo(request.path).absoluteFilePath()), request.line,
+            request.newTab);
     }
 
     return app.exec();

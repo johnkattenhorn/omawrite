@@ -3339,6 +3339,19 @@ private slots:
         QCOMPARE(appended.kind, Request::Append);
         QCOMPARE(appended.path, QStringLiteral("log.md:9"));
 
+        // --tab is a modifier, not a mode, so it reads the same on either side
+        // of the file it applies to.
+        QVERIFY(parse({QStringLiteral("omawrite"), QStringLiteral("--open"),
+                       QStringLiteral("notes.md"), QStringLiteral("--tab")}).newTab);
+        QVERIFY(parse({QStringLiteral("omawrite"), QStringLiteral("--tab"),
+                       QStringLiteral("--open"), QStringLiteral("notes.md")}).newTab);
+        QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--tab"),
+                        QStringLiteral("--open"), QStringLiteral("notes.md:4")}).line, 4);
+        QVERIFY(!parse({QStringLiteral("omawrite"), QStringLiteral("--open"),
+                        QStringLiteral("notes.md")}).newTab);
+        QVERIFY(parse({QStringLiteral("omawrite"), QStringLiteral("draft.md"),
+                       QStringLiteral("--tab")}).newTab);
+
         QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--open")}).kind,
                  Request::Error);
         QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--nope")}).exitCode, 1);
