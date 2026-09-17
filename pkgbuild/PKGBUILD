@@ -1,11 +1,16 @@
-# Maintainer: David Heinemeier Hansson <david@hey.com>
+# Maintainer: John Kattenhorn <john.kattenhorn.personal@gmail.com>
+# Upstream maintainer: David Heinemeier Hansson <david@hey.com>
+#
+# Builds the working tree, not a release tarball, so what lands in /usr/bin is
+# whatever is checked out. pkgver carries the commit count and sha for that
+# reason: `pacman -Q omawrite` should say which build is installed.
 
 pkgname=omawrite
-pkgver=0.1.0
+pkgver=0.5.0.r92.g3d8733c
 pkgrel=1
-pkgdesc='Dead-simple Markdown writing app built with Qt Quick'
+pkgdesc='Dead-simple Markdown writing app built with Qt Quick (custom fork: tabs, preview, sidebar, image paste, D-Bus CLI)'
 arch=('x86_64')
-url='https://github.com/omacom-io/omawrite'
+url='https://github.com/johnkattenhorn/omawrite'
 license=('MIT')
 install='omawrite.install'
 depends=('qt6-base>=6.5' 'qt6-declarative>=6.5' 'xdg-desktop-portal')
