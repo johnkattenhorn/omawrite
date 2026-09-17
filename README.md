@@ -12,13 +12,36 @@ Install via the Omarchy Package Repository via the `omawrite` package. It's inst
 
 ## Command line
 
-`omawrite` opens an empty document, and `omawrite FILE` opens a Markdown file.
-`omawrite --help` prints that usage without opening a window.
+```
+omawrite [FILE]              open a window, on FILE when there is one
+omawrite --open FILE[:LINE]  show FILE in the window already on screen
+omawrite --append FILE       add stdin to the end of FILE, no window
+omawrite --list-tabs         print what the last session left open
+omawrite --help              print the usage and exit
+```
 
-That last one is mostly for coding agents. Ask one to open a file in Omawrite
-and it runs `omawrite --help` first to work out how, so the help has to answer
-in the terminal, and it has to say that the process stays up until the window
-is closed.
+`--open` goes over the session bus, so it reaches the Omawrite already running
+instead of starting a second one beside it — a script that shows a file five
+times leaves five tabs at most, never five windows. It returns as soon as the
+window has the file, so it does not block a shell:
+
+```sh
+omawrite --open notes/standup.md:12
+```
+
+`--append` and `--list-tabs` answer before Qt claims the terminal, so they work
+over ssh with no desktop session and with nothing running. Appending writes the
+file directly; an Omawrite holding that file notices through the watcher it
+already has:
+
+```sh
+date -u +%F | omawrite --append notes/log.md
+```
+
+This is mostly for coding agents. Ask one to open a file in Omawrite and it runs
+`omawrite --help` first to work out how, so the help has to answer in the
+terminal, and it has to say that a plain `omawrite FILE` stays up until the
+window is closed while `--open` does not.
 
 ## Shortcuts
 
