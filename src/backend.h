@@ -13,6 +13,7 @@
 #include <memory>
 
 class MarkdownHighlighter;
+class PreviewDocument;
 class QTextDocument;
 class QWindow;
 class QLockFile;
@@ -65,6 +66,9 @@ public:
     static QString sanitizedEntryName(const QString &text);
 
     Q_INVOKABLE void attachDocument(QObject *textDocument);
+    Q_INVOKABLE void attachPreviewDocument(QObject *textDocument);
+    Q_INVOKABLE void setPreviewMarkdown(const QString &markdown);
+    Q_INVOKABLE void setPreviewWidth(int width);
     Q_INVOKABLE void openDialog();
     Q_INVOKABLE void setFolder(const QUrl &url);
     Q_INVOKABLE void openParentFolder();
@@ -113,6 +117,7 @@ signals:
     void externalChangeDetected(bool deleted, bool locallyModified);
     void folderChanged();
     void documentLoaded();
+    void previewChanged();
 
 private:
     void loadDocumentText(const QString &text);
@@ -139,6 +144,7 @@ private:
     void clearRecovery();
     QString recoveryPath() const;
     void watchCurrentFile();
+    void watchPreviewImage(const QString &path);
     void loadOmarchyTheme();
     void watchOmarchyTheme();
 
@@ -162,6 +168,9 @@ private:
     QPointer<QTextDocument> m_document;
     QPointer<QWindow> m_parentWindow;
     QPointer<MarkdownHighlighter> m_highlighter;
+    QPointer<PreviewDocument> m_previewDocument;
+    QFileSystemWatcher m_previewImageWatcher;
+    QString m_previewMarkdown;
     QString m_lastDocumentText;
     QByteArray m_lastKnownFileContents;
     bool m_hasKnownFileContents = false;

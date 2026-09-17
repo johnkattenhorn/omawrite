@@ -21,6 +21,7 @@ Install via the Omarchy Package Repository via the `omawrite` package. It's inst
   folder, and puts the keyboard in it. Pressing it again takes the sidebar away
   and hands the keyboard back to the text — it never reaches into the panel
   while you are writing. It starts closed.
+- `Ctrl+Shift+P` toggles the Markdown preview.
 - `Ctrl+N` opens a new Omawrite window.
 - `Ctrl+Z`, `Ctrl+Shift+Z`, and `Ctrl+Y` handle undo and redo.
 - `Super+F` toggles fullscreen. Qt maps this key as `Meta+F`.

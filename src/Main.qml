@@ -39,6 +39,7 @@ ApplicationWindow {
     property bool replaceOpen: false
     property bool keyboardWaitingForDialog: false
     property bool closeAnyway: false
+    property bool previewVisible: false
 
     Material.theme: darkMode ? Material.Dark : Material.Light
     Material.accent: backend.themeAccent
@@ -162,6 +163,24 @@ ApplicationWindow {
         win.visibility = win.visibility === Window.FullScreen
             ? Window.Windowed
             : Window.FullScreen;
+    }
+
+    function togglePreview() {
+        previewVisible = !previewVisible;
+        previewTimer.stop();
+        if (previewVisible) {
+            backend.setPreviewWidth(preview.width);
+            backend.setPreviewMarkdown(editor.text);
+            editorFlick.scrollTo(0);
+        } else {
+            editor.forceActiveFocus();
+        }
+    }
+
+    Timer {
+        id: previewTimer
+        interval: 150
+        onTriggered: backend.setPreviewMarkdown(editor.text)
     }
 
     function updateSearch() {
@@ -294,6 +313,12 @@ ApplicationWindow {
     }
 
     Shortcut {
+        sequence: "Ctrl+Shift+P"
+        context: Qt.ApplicationShortcut
+        onActivated: win.togglePreview()
+    }
+
+    Shortcut {
         sequences: ["Meta+F", "F11"]
         context: Qt.ApplicationShortcut
         onActivated: toggleFullScreen()
@@ -330,6 +355,13 @@ ApplicationWindow {
 
     Connections {
         target: backend
+
+        function onPreviewChanged() {
+            if (!win.previewVisible)
+                return;
+            var contentY = editorFlick.contentY;
+            Qt.callLater(function() { editorFlick.scrollTo(editorFlick.clampContentY(contentY)); });
+        }
 
         function onOpenDialogRequested() {
             openFileDialog.open();
@@ -394,7 +426,7 @@ ApplicationWindow {
         standardButtons: Dialog.Close
         anchors.centerIn: parent
         contentItem: Label {
-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
+            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
             lineHeight: 1.5
         }
     }
@@ -456,7 +488,9 @@ ApplicationWindow {
             anchors.rightMargin: 24
             clip: true
             contentWidth: width
-            contentHeight: Math.max(height, editor.y + editor.implicitHeight + 220)
+            contentHeight: Math.max(height, (win.previewVisible ? preview : editor).y
+                                    + (win.previewVisible ? preview.implicitHeight
+                                                          : editor.implicitHeight) + 220)
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar {
                 policy: ScrollBar.AsNeeded
@@ -642,6 +676,7 @@ ApplicationWindow {
             TextEdit {
                 id: editor
                 objectName: "sourceEditor"
+                visible: !win.previewVisible
                 // Whole pixels keep natively hinted glyphs crisp; pinning the
                 // column to them elsewhere only makes it step when dragged.
                 x: renderType === TextEdit.NativeRendering
@@ -1022,6 +1057,8 @@ ApplicationWindow {
                     }
                     if (win.searchOpen && contentChanged)
                         win.updateSearch();
+                    if (win.previewVisible)
+                        previewTimer.restart();
                 }
 
                 Repeater {
@@ -1094,6 +1131,29 @@ ApplicationWindow {
                     forceActiveFocus();
                 }
             }
+
+            TextEdit {
+                id: preview
+                objectName: "renderedPreview"
+                x: Math.round((editorFlick.width - width) / 2)
+                y: Math.max(42, Math.round(win.height * 0.05))
+                width: win.editorWidth
+                height: Math.max(editorFlick.height - y - 96, implicitHeight + 20)
+                visible: win.previewVisible
+                readOnly: true
+                selectByMouse: true
+                wrapMode: TextEdit.Wrap
+                color: win.textColor
+                font.family: "iA Writer Mono S"
+                font.pixelSize: win.editorFontPixelSize
+                renderType: editor.renderType
+                onWidthChanged: backend.setPreviewWidth(width)
+                onLinkActivated: function(link) { backend.openExternalUrl(link) }
+                Component.onCompleted: {
+                    backend.attachPreviewDocument(textDocument);
+                    backend.setPreviewWidth(width);
+                }
+            }
         }
 
         Row {
@@ -1127,6 +1187,14 @@ ApplicationWindow {
                 iconColor: win.mutedColor
                 tooltip: "Files"
                 onClicked: win.setSidebarOpen(!win.sidebarOpen)
+            }
+
+            FooterIconButton {
+                objectName: "modeToggle"
+                iconName: "preview"
+                iconColor: win.mutedColor
+                tooltip: win.previewVisible ? "Editor" : "Preview"
+                onClicked: win.togglePreview()
             }
 
             Label {
