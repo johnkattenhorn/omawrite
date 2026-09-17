@@ -231,16 +231,47 @@ ApplicationWindow {
             : Window.FullScreen;
     }
 
+    // Where the viewport sits through the document, 0 at the top and 1 at the
+    // bottom. The two surfaces are different heights, so the place in the
+    // writing is the only thing they can agree on.
+    function scrollFraction() {
+        var span = editorFlick.contentHeight - editorFlick.height;
+        return span > 0 ? Math.max(0, Math.min(1, editorFlick.contentY / span)) : 0;
+    }
+
+    function scrollToFraction(fraction) {
+        var span = editorFlick.contentHeight - editorFlick.height;
+        editorFlick.scrollTo(span > 0 ? fraction * span : 0);
+    }
+
     function togglePreview() {
+        // Read before the swap, applied after: toggling used to drop the reader
+        // at the top of the document, which on anything long means finding your
+        // place again every time you look.
+        var fraction = scrollFraction();
         previewVisible = !previewVisible;
         previewTimer.stop();
         if (previewVisible) {
             backend.setPreviewWidth(preview.width);
             backend.setPreviewMarkdown(editor.text);
-            editorFlick.scrollTo(0);
         } else {
             editor.forceActiveFocus();
         }
+        // The surface that just appeared has not been laid out yet, so its
+        // height is only known once Qt has been round the loop.
+        previewScrollRestore.fraction = fraction;
+        previewScrollRestore.restart();
+    }
+
+    // Applied a beat after the swap: the surface that just became visible has
+    // not been through a layout pass, so its height is not there to scroll
+    // against until Qt has been round the loop once.
+    Timer {
+        id: previewScrollRestore
+        property real fraction: 0
+        interval: 0
+        repeat: false
+        onTriggered: win.scrollToFraction(fraction)
     }
 
     Timer {

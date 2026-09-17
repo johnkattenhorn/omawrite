@@ -3399,6 +3399,61 @@ private slots:
         QCOMPARE(Cli::listTabs(), 0);
     }
 
+    void keepsTheReadingPlaceAcrossThePreviewToggle() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        auto *viewport = window->findChild<QQuickItem *>(QStringLiteral("editorViewport"));
+        QVERIFY(editor);
+        QVERIFY(viewport);
+
+        // Long enough that the viewport cannot hold it, or there is no scrolling
+        // to preserve and the test would pass without proving anything.
+        QString document;
+        for (int paragraph = 0; paragraph < 200; ++paragraph) {
+            document += QStringLiteral("## Heading %1\n\nSome words in a paragraph.\n\n")
+                            .arg(paragraph);
+        }
+        editor->setProperty("text", document);
+
+        QTRY_VERIFY(viewport->property("contentHeight").toReal()
+                    > viewport->property("height").toReal());
+
+        const auto span = [&viewport] {
+            return viewport->property("contentHeight").toReal()
+                   - viewport->property("height").toReal();
+        };
+        const auto fraction = [&viewport, &span] {
+            return span() > 0 ? viewport->property("contentY").toReal() / span() : 0.0;
+        };
+
+        QVERIFY(QMetaObject::invokeMethod(viewport, "scrollTo",
+                                          Q_ARG(QVariant, span() * 0.5)));
+        const qreal before = fraction();
+        QVERIFY(before > 0.4);
+
+        // The preview is a different height, so the place in the writing is the
+        // only thing the two surfaces can agree on.
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "togglePreview"));
+        QVERIFY(window->property("previewVisible").toBool());
+        QTRY_VERIFY(qAbs(fraction() - before) < 0.05);
+
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "togglePreview"));
+        QVERIFY(!window->property("previewVisible").toBool());
+        QTRY_VERIFY(qAbs(fraction() - before) < 0.05);
+    }
+
 private:
     // Points HOME at a scratch tree holding one colors.toml, and puts it back on the way out.
     struct ScopedTheme {
