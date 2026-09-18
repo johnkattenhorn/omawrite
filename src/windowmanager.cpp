@@ -124,6 +124,14 @@ Backend *WindowManager::primaryBackend() const {
     return m_windows.isEmpty() ? nullptr : m_windows.constFirst().backend;
 }
 
+QList<Backend *> WindowManager::backends() const {
+    QList<Backend *> result;
+    result.reserve(m_windows.size());
+    for (const WritingWindow &window : m_windows)
+        result.append(window.backend);
+    return result;
+}
+
 void WindowManager::setDarkMode(bool darkMode) {
     m_darkMode = darkMode;
     for (const WritingWindow &window : m_windows)

@@ -8,6 +8,7 @@
 #include <QTextDocument>
 #include "buffersession.h"
 #include "workspacesession.h"
+#include "remote.h"
 #include "windowmanager.h"
 #include <QTextLayout>
 #include <QQuickItem>
@@ -1263,6 +1264,46 @@ private slots:
         QFile kept(path);
         QVERIFY(kept.open(QIODevice::ReadOnly));
         QCOMPARE(QString::fromUtf8(kept.readAll()), QStringLiteral("my version"));
+    }
+
+    void showsTheDocumentTheNewTabOpened() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString first = folder.filePath(QStringLiteral("first.md"));
+        const QString second = folder.filePath(QStringLiteral("second.md"));
+        QFile a(first);
+        QVERIFY(a.open(QIODevice::WriteOnly));
+        a.write("# First document\n\nalpha alpha alpha");
+        a.close();
+        QFile b(second);
+        QVERIFY(b.open(QIODevice::WriteOnly));
+        b.write("# Second document\n\nbeta beta beta");
+        b.close();
+
+        Backend backend;
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> created(createMainWindow(engine, component, backend));
+        QVERIFY2(created, qPrintable(component.errorString()));
+        QQuickWindow *window = qobject_cast<QQuickWindow *>(created.data());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+
+        backend.open(QUrl::fromLocalFile(first));
+        QTRY_VERIFY(editor->property("text").toString().contains(QStringLiteral("First document")));
+
+        // Ctrl+T, then the sidebar: a new tab and a document opened into it.
+        backend.newBuffer();
+        QTRY_COMPARE(editor->property("text").toString(), QString());
+        QVERIFY(QMetaObject::invokeMethod(window, "requestOpen",
+                                          Q_ARG(QVariant, QUrl::fromLocalFile(second))));
+
+        QCOMPARE(backend.buffers().size(), 2);
+        QTRY_VERIFY(editor->property("text").toString().contains(QStringLiteral("Second document")));
+        QVERIFY(!editor->property("text").toString().contains(QStringLiteral("First document")));
     }
 
     void escapeLeavesARemovedFileRemoved() {
@@ -2663,6 +2704,66 @@ private slots:
         QCOMPARE(backend.activeBufferText(), QStringLiteral("first"));
     }
 
+    void reportsAndSteersTabsForTheCommandLine() {
+        QTemporaryDir stateDirectory;
+        QVERIFY(stateDirectory.isValid());
+        const QString first = stateDirectory.filePath(QStringLiteral("first.md"));
+        const QString second = stateDirectory.filePath(QStringLiteral("second.md"));
+        QFile a(first);
+        QVERIFY(a.open(QIODevice::WriteOnly | QIODevice::Text));
+        a.write("# First\n\nalpha beta");
+        a.close();
+        QFile b(second);
+        QVERIFY(b.open(QIODevice::WriteOnly | QIODevice::Text));
+        b.write("# Second\n\ngamma");
+        b.close();
+
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+        WorkspaceSession session(stateDirectory.path());
+        QQmlEngine engine;
+        WindowManager manager(&session, &engine, QUrl::fromLocalFile(mainQmlPath));
+        Backend *backend = manager.createWindow();
+        QVERIFY(backend);
+
+        backend->open(QUrl::fromLocalFile(first));
+        backend->newBuffer();
+        backend->open(QUrl::fromLocalFile(second));
+        QCOMPARE(backend->buffers().size(), 2);
+
+        // The bus face reads the windows themselves, so this is the state a
+        // caller of `omawrite --tabs` is given, without a bus in the test.
+        Remote remote(&manager);
+        const QJsonObject state = QJsonDocument::fromJson(remote.State().toUtf8()).object();
+        const QJsonArray windows = state.value(QStringLiteral("windows")).toArray();
+        QCOMPARE(windows.size(), 1);
+        const QJsonArray tabs = windows.first().toObject().value(QStringLiteral("tabs")).toArray();
+        QCOMPARE(tabs.size(), 2);
+        QCOMPARE(tabs.at(0).toObject().value(QStringLiteral("index")).toInt(), 1);
+        QCOMPARE(tabs.at(0).toObject().value(QStringLiteral("path")).toString(), first);
+        QVERIFY(!tabs.at(0).toObject().value(QStringLiteral("active")).toBool());
+        QCOMPARE(tabs.at(1).toObject().value(QStringLiteral("path")).toString(), second);
+        QVERIFY(tabs.at(1).toObject().value(QStringLiteral("active")).toBool());
+        QCOMPARE(tabs.at(1).toObject().value(QStringLiteral("firstLine")).toString(),
+                 QStringLiteral("# Second"));
+
+        // A tab is named by the number that was printed, by its path, or by
+        // its file name; nothing names the one that is showing.
+        QCOMPARE(remote.ReadText(QString()), QStringLiteral("# Second\n\ngamma"));
+        QCOMPARE(remote.ReadText(QStringLiteral("1")), QStringLiteral("# First\n\nalpha beta"));
+        QCOMPARE(remote.ReadText(first), QStringLiteral("# First\n\nalpha beta"));
+        QCOMPARE(remote.ReadText(QStringLiteral("first.md")),
+                 QStringLiteral("# First\n\nalpha beta"));
+        QCOMPARE(remote.ReadText(QStringLiteral("nothing.md")), QString());
+
+        // And selecting one moves the editor onto it, which is the whole point
+        // of being able to name it.
+        QVERIFY(remote.SelectTab(QStringLiteral("first.md")));
+        QTRY_COMPARE(backend->currentDocumentText(), QStringLiteral("# First\n\nalpha beta"));
+        QCOMPARE(remote.ReadText(QString()), QStringLiteral("# First\n\nalpha beta"));
+        QVERIFY(!remote.SelectTab(QStringLiteral("nothing.md")));
+    }
+
     void windowManagerCreatesIndependentWritingWindows() {
         QTemporaryDir stateDirectory;
         QVERIFY(stateDirectory.isValid());
@@ -3654,6 +3755,31 @@ private slots:
                  QStringLiteral("notes.md:"));
         QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--open"),
                         QStringLiteral("notes.md:0")}).line, 0);
+
+        // The reading and steering calls. --read takes an optional tab and
+        // --select a required one, and neither may swallow the flag after it.
+        QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--tabs")}).kind,
+                 Request::Tabs);
+        QVERIFY(!parse({QStringLiteral("omawrite"), QStringLiteral("--tabs")}).json);
+        QVERIFY(parse({QStringLiteral("omawrite"), QStringLiteral("--tabs"),
+                       QStringLiteral("--json")}).json);
+
+        const Request read = parse({QStringLiteral("omawrite"), QStringLiteral("--read"),
+                                    QStringLiteral("notes.md")});
+        QCOMPARE(read.kind, Request::Read);
+        QCOMPARE(read.path, QStringLiteral("notes.md"));
+        QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--read")}).path, QString());
+        QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--read"),
+                        QStringLiteral("--json")}).path, QString());
+
+        const Request selected = parse({QStringLiteral("omawrite"), QStringLiteral("--select"),
+                                        QStringLiteral("2")});
+        QCOMPARE(selected.kind, Request::Select);
+        QCOMPARE(selected.path, QStringLiteral("2"));
+
+        // --select with nothing to select is an error, not a silent no-op.
+        QCOMPARE(parse({QStringLiteral("omawrite"), QStringLiteral("--select")}).kind,
+                 Request::Error);
 
         // --append takes the name whole: its text is on stdin, so a line number
         // would have nothing to mean.

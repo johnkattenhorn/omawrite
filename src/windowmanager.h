@@ -23,6 +23,9 @@ public:
     int recoverLegacySnapshots();
     int windowCount() const;
     Backend *primaryBackend() const;
+    // Every window this process holds, in the order they were opened, so a
+    // caller asking what is open sees all of it rather than the first one.
+    QList<Backend *> backends() const;
     void setDarkMode(bool darkMode);
     void setTextScale(qreal textScale);
 

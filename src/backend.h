@@ -98,6 +98,9 @@ public:
     QVariantList folderEntries() const;
     bool focusMode() const { return m_focusMode; }
     static int countWords(const QString &text);
+    // The text the editor holds this instant, which is what `omawrite --read`
+    // answers with: the session copy is up to an autosave behind it.
+    QString currentDocumentText() const;
     static QString normalizedLinkUrl(const QString &clipboardText);
     static QString suggestedFileName(const QString &text);
     static QString sanitizedEntryName(const QString &text);
@@ -205,7 +208,6 @@ private:
     QDir defaultDirectory() const;
     void applyFolder(const QString &path, bool remember);
     void watchCurrentFolder();
-    QString currentDocumentText() const;
     void setWordCount(int words);
     void refreshWordCount();
     void scheduleWordCount();

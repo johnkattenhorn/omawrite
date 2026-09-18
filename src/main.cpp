@@ -48,6 +48,15 @@ int main(int argc, char *argv[]) {
     if (request.kind == Cli::Request::ListTabs)
         return Cli::listTabs();
 
+    // Answered by the Omawrite already running, so these need a bus and no
+    // window of their own.
+    if (request.kind == Cli::Request::Tabs)
+        return Cli::tabs(request.json);
+    if (request.kind == Cli::Request::Read)
+        return Cli::readTab(request.path);
+    if (request.kind == Cli::Request::Select)
+        return Cli::selectTab(request.path);
+
     // An Omawrite already on this bus takes the file; a tabbed editor asked to
     // show something five times should end with five tabs at most, never five
     // windows. Nobody there means this process is the one that opens.

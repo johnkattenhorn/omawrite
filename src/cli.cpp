@@ -1,5 +1,7 @@
 #include "cli.h"
 
+#include "remote.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -19,6 +21,9 @@ QString Cli::usage() {
         "  omawrite --open FILE[:LINE] [--tab]\n"
         "  omawrite --append FILE\n"
         "  omawrite --list-tabs\n"
+        "  omawrite --tabs [--json]\n"
+        "  omawrite --read [TAB]\n"
+        "  omawrite --select TAB\n"
         "\n"
         "Opens the Omawrite window. FILE is the Markdown file to open; without\n"
         "one, Omawrite starts on an empty document, or on the draft recovered\n"
@@ -35,6 +40,15 @@ QString Cli::usage() {
         "                      is open in a tab is updated in place.\n"
         "  --list-tabs         Print what the last session left open, one path\n"
         "                      per line, and exit.\n"
+        "  --tabs              Print what the running Omawrite has open now:\n"
+        "                      one line per tab, the one showing marked with\n"
+        "                      *, with its word count and path. --json prints\n"
+        "                      the same as JSON.\n"
+        "  --read [TAB]        Print the text of TAB as the editor holds it.\n"
+        "                      Without TAB, the tab that is showing.\n"
+        "  --select TAB        Bring TAB forward, and its window with it.\n"
+        "  TAB                 A tab, named by the number --tabs printed, by\n"
+        "                      its path, or by its file name.\n"
         "  -h, --help          Show this message and exit\n"
         "\n"
         "Omawrite is a graphical app: opening a window needs a desktop session,\n"
@@ -44,6 +58,9 @@ QString Cli::usage() {
         "\n"
         "  omawrite --open notes/standup.md:12\n"
         "  date | omawrite --append notes/log.md\n"
+        "  omawrite --tabs\n"
+        "  omawrite --read standup.md > /tmp/draft.md\n"
+        "  omawrite --select 2\n"
         "\n"
         "Everything else is a keyboard shortcut. Ctrl+? lists them in the app,\n"
         "and https://github.com/omacom-io/omawrite#shortcuts has the same list.\n");
@@ -80,11 +97,12 @@ Cli::Request Cli::parse(const QStringList &arguments) {
     // A modifier rather than a mode, so it reads the same on either side of the
     // file it applies to.
     const bool newTab = rest.contains(QLatin1String("--tab"));
+    const bool asJson = rest.contains(QLatin1String("--json"));
 
     for (int index = 0; index < rest.size(); ++index) {
         const QString argument = rest.at(index);
 
-        if (argument == QLatin1String("--tab"))
+        if (argument == QLatin1String("--tab") || argument == QLatin1String("--json"))
             continue;
 
         if (argument == QLatin1String("-h") || argument == QLatin1String("--help")) {
@@ -94,6 +112,36 @@ Cli::Request Cli::parse(const QStringList &arguments) {
 
         if (argument == QLatin1String("--list-tabs"))
             return {Request::ListTabs, {}, 0, 0, false};
+
+        if (argument == QLatin1String("--tabs")) {
+            Request live;
+            live.kind = Request::Tabs;
+            live.json = asJson;
+            return live;
+        }
+
+        const bool wantsRead = argument == QLatin1String("--read");
+        const bool wantsSelect = argument == QLatin1String("--select");
+        if (wantsRead || wantsSelect) {
+            // The target is optional for --read, which reads the tab that is
+            // showing, and required for --select, which has nothing to bring
+            // forward without one. A flag is never the target.
+            QString target;
+            if (index + 1 < rest.size()
+                    && !rest.at(index + 1).startsWith(QLatin1Char('-')))
+                target = rest.at(++index);
+
+            if (wantsSelect && target.isEmpty()) {
+                QTextStream(stderr) << QStringLiteral("omawrite: --select needs a tab\n\n")
+                                    << usage();
+                return {Request::Error, {}, 0, 1, false};
+            }
+
+            Request request;
+            request.kind = wantsRead ? Request::Read : Request::Select;
+            request.path = target;
+            return request;
+        }
 
         const bool wantsOpen = argument == QLatin1String("--open");
         const bool wantsAppend = argument == QLatin1String("--append");
@@ -169,6 +217,84 @@ int Cli::listTabs() {
             << QLatin1Char('\n');
     }
     return 0;
+}
+
+// One line per tab: the marker for the tab showing, the number that names it
+// everywhere else, its word count, and where it lives.
+static QString tabLine(const QJsonObject &tab) {
+    const QString path = tab.value(QStringLiteral("path")).toString();
+    const int words = tab.value(QStringLiteral("words")).toInt();
+    return QStringLiteral("%1 %2  %3  %4 words%5")
+        .arg(tab.value(QStringLiteral("active")).toBool() ? QStringLiteral("*")
+                                                          : QStringLiteral(" "))
+        .arg(tab.value(QStringLiteral("index")).toInt(), 2)
+        .arg(path.isEmpty() ? tab.value(QStringLiteral("title")).toString() : path)
+        .arg(words)
+        .arg(tab.value(QStringLiteral("modified")).toBool() ? QStringLiteral("  modified")
+                                                            : QString());
+}
+
+int Cli::tabs(bool asJson) {
+    const QString state = Remote::requestState();
+    if (state.isEmpty()) {
+        // An Omawrite that holds the name but will not answer is an older one
+        // than this: the name was there before these calls were.
+        QTextStream(stderr) << (Remote::isRunning()
+            ? QStringLiteral("omawrite: the running Omawrite is older than this "
+                             "one and has no --tabs to answer with; restart it\n")
+            : QStringLiteral("omawrite: nothing running on this session bus; "
+                             "--list-tabs reads the last session instead\n"));
+        return 3;
+    }
+
+    QTextStream out(stdout);
+    if (asJson) {
+        out << state << QLatin1Char('\n');
+        return 0;
+    }
+
+    const QJsonArray windows = QJsonDocument::fromJson(state.toUtf8())
+                                   .object()
+                                   .value(QStringLiteral("windows"))
+                                   .toArray();
+    int number = 0;
+    for (const QJsonValue &value : windows) {
+        const QJsonObject window = value.toObject();
+        out << QStringLiteral("window %1%2\n")
+                   .arg(++number)
+                   .arg(window.value(QStringLiteral("focused")).toBool()
+                            ? QStringLiteral(" (focused)") : QString());
+        for (const QJsonValue &tab : window.value(QStringLiteral("tabs")).toArray())
+            out << QStringLiteral("  ") << tabLine(tab.toObject()) << QLatin1Char('\n');
+    }
+    return 0;
+}
+
+int Cli::readTab(const QString &target) {
+    const QString text = Remote::requestText(target);
+    // A tab can hold nothing at all, so an empty answer only means failure
+    // when nobody answered. Asking what is open tells the two apart.
+    if (text.isEmpty() && Remote::requestState().isEmpty()) {
+        QTextStream(stderr) << (Remote::isRunning()
+            ? QStringLiteral("omawrite: the running Omawrite is older than this "
+                             "one and has no --read to answer with; restart it\n")
+            : QStringLiteral("omawrite: nothing running on this session bus\n"));
+        return 3;
+    }
+
+    QTextStream out(stdout);
+    out << text;
+    if (!text.endsWith(QLatin1Char('\n')))
+        out << QLatin1Char('\n');
+    return 0;
+}
+
+int Cli::selectTab(const QString &target) {
+    if (Remote::requestSelect(target))
+        return 0;
+
+    QTextStream(stderr) << QStringLiteral("omawrite: no tab called %1 is open\n").arg(target);
+    return 4;
 }
 
 int Cli::appendStdin(const QString &path) {
