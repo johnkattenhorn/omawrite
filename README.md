@@ -31,6 +31,9 @@ omawrite --open FILE[:LINE]  show FILE in the window already on screen
 omawrite --open FILE --tab   open it beside what is showing, not over it
 omawrite --append FILE       add stdin to the end of FILE, no window
 omawrite --list-tabs         print what the last session left open
+omawrite --tabs [--json]     print what the running window has open now
+omawrite --read [TAB]        print a tab's text as the editor holds it
+omawrite --select TAB        bring a tab forward, and its window with it
 omawrite --help              print the usage and exit
 ```
 
@@ -50,6 +53,20 @@ already has:
 
 ```sh
 date -u +%F | omawrite --append notes/log.md
+```
+
+`--tabs`, `--read` and `--select` go over the same bus, and they are how an
+agent or a script works on a document while you have it open in front of you.
+`--tabs` numbers every tab across every window and marks the one showing.
+`--read` prints that tab's text as the editor holds it, which the session file
+is up to an autosave behind. `--select` moves the editor onto a tab. All three
+name a tab the same way: the number `--tabs` printed, a path, a file name, or
+nothing for the tab in front.
+
+```sh
+omawrite --tabs
+omawrite --read standup.md > /tmp/draft.md
+omawrite --select 2
 ```
 
 This is mostly for coding agents. Ask one to open a file in Omawrite and it runs

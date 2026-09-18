@@ -2,6 +2,24 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-18 — The reading calls answer from the window, not the session file
+
+`--list-tabs` reads `session.json`, which is what autosave last wrote. That is
+the right source for a question asked with nothing running, and the wrong one
+for "what is on screen right now": the showing tab can be up to 750ms ahead of
+it, and the session says nothing about which window is focused.
+
+`--tabs`, `--read` and `--select` therefore go over the same session bus
+`--open` already used, and `Remote::State()` reads each window's `Backend`
+directly. The tab that is showing is measured from the editor's own
+`QTextDocument`; the rest come from the session copy, because nothing else
+holds them. `--list-tabs` stays as it was, for the case where nothing is
+running.
+
+One index runs across every window, so the number `--tabs` prints is the number
+`--read` and `--select` take, and a tab can equally be named by its path or
+file name — a number is only useful next to the listing that produced it.
+
 ## 2026-09-17 — Escape dismisses the external-change prompt, and answers nothing
 
 The prompt used to refuse Escape: `closePolicy: Popup.NoAutoClose`, on the

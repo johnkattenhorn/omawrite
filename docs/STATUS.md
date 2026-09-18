@@ -10,13 +10,13 @@ drive.
 
 ## Where it is
 
-Branch `custom`, 105 commits ahead of `origin/master` (upstream `8f98892`).
-114 tests pass. Clean build, no warnings. Pushed to
+Branch `custom`, 110 commits ahead of `origin/master` (upstream `8f98892`).
+116 tests pass. Clean build, no warnings. Pushed to
 [johnkattenhorn/omawrite](https://github.com/johnkattenhorn/omawrite).
 
 ```sh
 ./bin/build    # build/omawrite
-./bin/test     # 114 passing
+./bin/test     # 116 passing
 ```
 
 ## What is in it
@@ -45,7 +45,10 @@ Written here:
   an `images/` folder beside the document and inserts a relative reference,
   which is the only shape #68's preview sandbox will load.
 - **Command line** — `--open FILE[:LINE] [--tab]` over the session bus,
-  `--append FILE` from stdin, `--list-tabs` from the session file.
+  `--append FILE` from stdin, `--list-tabs` from the session file, and
+  `--tabs` / `--read [TAB]` / `--select TAB` live from the running window, so
+  an agent can see what is open, read a tab as the editor holds it, and move
+  the editor onto one.
 - **Copy on select** — let go of a mouse selection and it is on the clipboard,
   the way a terminal does it, with a line in the footer that fades. A
   `PointHandler` does the watching; `Ctrl+Shift+C` turns it off, persisted under
