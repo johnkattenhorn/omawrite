@@ -21,6 +21,12 @@ Item {
     property bool available: true
     property string activity: ""
     property string documentName: ""
+    // The desktop's font, as Omamail's window uses: narrower than the writing
+    // font, so an answer beside the document shows more of itself.
+    property string fontFamily: "iA Writer Mono S"
+    // Omamail's own scale: body 12, the chrome a size behind it.
+    readonly property int bodySize: Math.round(12 * root.textScale)
+    readonly property int chromeSize: Math.round(11 * root.textScale)
 
     // Logical, like every other dimension here, so a dragged width survives a
     // change of desktop text size.
@@ -106,10 +112,10 @@ Item {
             anchors.rightMargin: 8
             anchors.verticalCenter: parent.verticalCenter
             text: root.documentName.length > 0 ? "Claude · " + root.documentName : "Claude"
-            color: root.mutedColor
+            color: root.textColor
             elide: Text.ElideMiddle
-            font.family: "iA Writer Mono S"
-            font.pixelSize: Math.round(12 * root.textScale)
+            font.family: root.fontFamily
+            font.pixelSize: root.chromeSize
         }
 
         Row {
@@ -123,8 +129,8 @@ Item {
                 text: "new"
                 color: newChatArea.containsMouse ? root.textColor : root.mutedColor
                 opacity: root.messages.length > 0 ? 1 : 0.35
-                font.family: "iA Writer Mono S"
-                font.pixelSize: Math.round(11 * root.textScale)
+                font.family: root.fontFamily
+                font.pixelSize: root.chromeSize
 
                 MouseArea {
                     id: newChatArea
@@ -142,7 +148,7 @@ Item {
                 objectName: "agentClose"
                 text: "×"
                 color: closeArea.containsMouse ? root.textColor : root.mutedColor
-                font.family: "iA Writer Mono S"
+                font.family: root.fontFamily
                 font.pixelSize: Math.round(14 * root.textScale)
 
                 MouseArea {
@@ -198,8 +204,12 @@ Item {
                     width: parent.width
                     height: turnText.implicitHeight + (turn.fromWriter ? Math.round(16 * root.textScale) : 0)
                     radius: 6
-                    color: turn.fromWriter ? root.selectionFill : "transparent"
-                    opacity: turn.fromWriter ? 0.18 : 1
+                    // The fill is faint, the words are not: an opacity on the
+                    // bubble would take the text down with the background.
+                    color: turn.fromWriter
+                        ? Qt.rgba(root.selectionFill.r, root.selectionFill.g,
+                                  root.selectionFill.b, 0.18)
+                        : "transparent"
 
                     TextEdit {
                         id: turnText
@@ -219,8 +229,8 @@ Item {
                         opacity: turn.trouble ? 0.9 : 1
                         selectionColor: root.selectionFill
                         selectedTextColor: root.textColor
-                        font.family: "iA Writer Mono S"
-                        font.pixelSize: Math.round(13 * root.textScale)
+                        font.family: root.fontFamily
+                        font.pixelSize: root.bodySize
                     }
                 }
             }
@@ -235,10 +245,9 @@ Item {
             text: root.available
                 ? "Ask about the document in front of you. Claude reads this folder, and the editor answers omawrite --read while you type."
                 : "The Claude command line is not installed, so there is nothing here to ask."
-            color: root.mutedColor
-            opacity: 0.7
-            font.family: "iA Writer Mono S"
-            font.pixelSize: Math.round(12 * root.textScale)
+            color: root.textColor
+            font.family: root.fontFamily
+            font.pixelSize: root.bodySize
         }
     }
 
@@ -268,8 +277,8 @@ Item {
                       + " " + root.elapsed + "s"
                 color: root.mutedColor
                 elide: Text.ElideRight
-                font.family: "iA Writer Mono S"
-                font.pixelSize: Math.round(11 * root.textScale)
+                font.family: root.fontFamily
+                font.pixelSize: root.chromeSize
             }
 
             Label {
@@ -278,8 +287,8 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "stop"
                 color: stopArea.containsMouse ? root.textColor : root.mutedColor
-                font.family: "iA Writer Mono S"
-                font.pixelSize: Math.round(11 * root.textScale)
+                font.family: root.fontFamily
+                font.pixelSize: root.chromeSize
 
                 MouseArea {
                     id: stopArea
@@ -322,8 +331,8 @@ Item {
                 color: root.textColor
                 selectionColor: root.selectionFill
                 selectedTextColor: root.textColor
-                font.family: "iA Writer Mono S"
-                font.pixelSize: Math.round(13 * root.textScale)
+                font.family: root.fontFamily
+                font.pixelSize: root.bodySize
 
                 // Enter sends and Shift+Enter is a newline, the way every other
                 // message box works. Escape stops a turn if one is running, and

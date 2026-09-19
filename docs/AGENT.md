@@ -1,7 +1,7 @@
 # Claude beside the document
 
-`Alt+G`, or the robot button at the right of the footer, opens a dock on the
-right of the window. Ask a question in it and Claude answers there, next to
+`Alt+G`, or the robot button at the top right of the window, opens a dock on
+the right of it. Ask a question in it and Claude answers there, next to
 the paragraph the question is about.
 
 The panel is not a chat window that happens to live in the editor. It knows
@@ -17,6 +17,10 @@ Escape                stop the turn, or close the panel when nothing is running
 new                   forget the conversation, keep the panel
 drag the left edge    resize; double-click it to go back to the default width
 ```
+
+The panel is drawn in the desktop's own font rather than the writing font,
+at Omamail's sizes: 12 for an answer, 11 for the chrome around it. That is
+narrower than iA Writer Mono S, so more of an answer fits beside the page.
 
 ## What Claude is told
 

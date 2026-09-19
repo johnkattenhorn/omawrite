@@ -24,6 +24,19 @@ ApplicationWindow {
     // The two dimmed strengths Omamail draws its chrome at, mixed from the
     // theme rather than fixed, so an icon here is as dark as the same icon in
     // the mail window: dim for anything you act on, dimmer a step behind it.
+    // Omamail draws its chrome in the desktop's own font rather than the one
+    // the document is written in. JetBrainsMono is narrower than iA Writer
+    // Mono S at the same size, so the panel holds more of an answer.
+    readonly property string chromeFont: {
+        const installed = Qt.fontFamilies();
+        const preferred = ["JetBrainsMono Nerd Font", "JetBrainsMono NF",
+                           "JetBrains Mono"];
+        for (var i = 0; i < preferred.length; i++) {
+            if (installed.indexOf(preferred[i]) >= 0)
+                return preferred[i];
+        }
+        return "iA Writer Mono S";
+    }
     readonly property color dimColor: Qt.rgba(
         textColor.r * 0.68 + pageColor.r * 0.32,
         textColor.g * 0.68 + pageColor.g * 0.32,
@@ -848,6 +861,7 @@ ApplicationWindow {
         available: agent.available
         activity: agent.activity
         documentName: backend.fileName
+        fontFamily: win.chromeFont
         logicalWidth: win.agentLogicalWidth
         // Never let the panel squeeze the writing column below its minimum.
         maximumLogicalWidth: Math.max(minimumLogicalWidth,
@@ -866,6 +880,28 @@ ApplicationWindow {
         anchors.fill: parent
         anchors.leftMargin: fileSidebar.width
         anchors.rightMargin: agentPanel.width
+
+        // Omamail keeps its AI control at the window's top right, away from the
+        // verbs that act on what is in front of you. Same corner here, above
+        // the writing rather than in a header Omawrite does not have, and it
+        // stays put when the panel slides the writing column along.
+        FooterIconButton {
+            id: agentButton
+            objectName: "agentButton"
+            iconName: "assistant"
+            // robot-outline, the glyph Omamail's agent button draws, from the
+            // Material Design Icons range the Omarchy shell uses.
+            glyph: 0xF167A
+            glyphOffset: -1
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.rightMargin: 12
+            anchors.topMargin: 12
+            z: 3
+            iconColor: win.agentOpen ? win.textColor : win.dimColor
+            tooltip: "Claude · Alt+G"
+            onClicked: win.toggleAgent()
+        }
 
         // A surface rather than a bare Item: the document scrolls behind this,
         // and with nothing opaque the text showed through the gaps between the
@@ -888,7 +924,7 @@ ApplicationWindow {
                 anchors.fill: parent
                 anchors.topMargin: 8
                 anchors.leftMargin: 12
-                anchors.rightMargin: 12
+                anchors.rightMargin: 12 + agentButton.width + 12
                 clip: true
                 contentWidth: tabStrip.width
                 contentHeight: height
@@ -1975,32 +2011,11 @@ ApplicationWindow {
                 }
             }
 
-            // Omamail keeps its AI control at the window's top right, away from
-            // the verbs that act on what is in front of you. Omawrite has no
-            // header, so the same place here is the right of the footer, with
-            // the count moved in beside it.
-            FooterIconButton {
-                id: agentButton
-                objectName: "agentButton"
-                iconName: "assistant"
-                // robot-outline, the glyph Omamail's agent button draws, from
-                // the Material Design Icons range the Omarchy shell uses.
-                glyph: 0xF167A
-                glyphOffset: -1
+            Label {
+                id: wordCountLabel
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 anchors.rightMargin: 12
-                anchors.bottomMargin: 10
-                iconColor: win.agentOpen ? win.textColor : win.dimColor
-                tooltip: "Claude · Alt+G"
-                onClicked: win.toggleAgent()
-            }
-
-            Label {
-                id: wordCountLabel
-                anchors.right: agentButton.left
-                anchors.bottom: parent.bottom
-                anchors.rightMargin: 14
                 anchors.bottomMargin: 10
                 text: backend.wordCount + (backend.wordCount === 1 ? " Word" : " Words")
                 color: win.mutedColor

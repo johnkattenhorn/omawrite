@@ -4243,7 +4243,7 @@ private slots:
         QVERIFY2(shortcut, "nothing is bound to Ctrl+/");
     }
 
-    void keepsTheAgentButtonAtTheFarRight() {
+    void keepsTheAgentButtonAtTheTopRight() {
         const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
         QVERIFY(!mainQmlPath.isEmpty());
 
@@ -4260,17 +4260,26 @@ private slots:
         QVERIFY2(window, qPrintable(component.errorString()));
 
         auto *agentButton = window->findChild<QQuickItem *>(QStringLiteral("agentButton"));
-        auto *saveButton = window->findChild<QQuickItem *>(QStringLiteral("saveButton"));
-        auto *footer = window->findChild<QQuickItem *>(QStringLiteral("footer"));
+        auto *panel = window->findChild<QQuickItem *>(QStringLiteral("agentPanel"));
+        auto *root = qobject_cast<QQuickWindow *>(window.data())->contentItem();
+        // The window is never shown here, so its content item has no size of
+        // its own; the window's own width is what the anchors resolve against.
+        const qreal windowWidth = window->property("width").toReal();
         QVERIFY(agentButton);
-        QVERIFY(saveButton);
-        QVERIFY(footer);
+        QVERIFY(panel);
 
-        // Omamail keeps its AI control at the far edge, away from the verbs
-        // that act on the document. Here that is the right of the footer.
-        const qreal right = agentButton->mapToItem(footer, QPointF(agentButton->width(), 0)).x();
-        QVERIFY(right > saveButton->mapToItem(footer, QPointF()).x());
-        QVERIFY2(footer->width() - right < 24, "the agent button is not against the right edge");
+        // Omamail keeps its AI control at the window's top right. Here it is
+        // the same corner, above the writing.
+        const QPointF corner = agentButton->mapToItem(root, QPointF(agentButton->width(), 0));
+        QVERIFY2(windowWidth - corner.x() < 24, "the agent button is not against the right");
+        QVERIFY2(corner.y() < 24, "the agent button is not at the top");
+
+        // Opening the panel moves it along rather than burying it underneath.
+        window->setProperty("agentOpen", true);
+        QTRY_VERIFY(panel->width() > 0);
+        const qreal moved = agentButton->mapToItem(root, QPointF(agentButton->width(), 0)).x();
+        QVERIFY(moved < corner.x());
+        QVERIFY2(moved <= windowWidth - panel->width(), "the panel is over the button");
     }
 
     void drawsTheChromeAtOmamailsDim() {

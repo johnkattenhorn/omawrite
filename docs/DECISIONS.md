@@ -8,9 +8,10 @@ Omamail is the other Qt window in this desktop doing the same kind of work, so
 it is the standard this fork measures its chrome against rather than inventing
 a second one.
 
-Three things come from it. The AI control sits at the window's far edge, away
-from the verbs that act on what is in front of you: its header right, and here
-the footer right, since Omawrite has no header. The icons are Nerd Font glyphs
+Four things come from it. The AI control sits at the window's top right, where
+Omamail's is: above the writing rather than in a header Omawrite does not have,
+and clear of the verbs in the footer that act on the document. The tab strip
+stops short of it rather than scrolling underneath. The icons are Nerd Font glyphs
 from the Material Design Icons range the Omarchy shell draws its own bar from,
 so a verb in the editor looks like the same verb on the desktop —
 `content-save-outline`, `folder-open-outline`, `dock-left`, `eye-outline`, and
@@ -18,6 +19,11 @@ so a verb in the editor looks like the same verb on the desktop —
 draws. And they are drawn at Omamail's `dim`, which is 68% foreground over 32%
 background mixed from the live theme, rather than at a fixed grey behind 0.55
 opacity: the old footer read as decoration you were meant to ignore.
+
+The panel is drawn in the desktop's font at Omamail's sizes -- 12 for an
+answer, 11 for the chrome -- not in iA Writer Mono S at 13. The writing font
+belongs to the document; a conversation beside it is chrome, and the narrower
+face shows more of an answer at once.
 
 The drawn icons stay in the file as a fallback. A machine with no Nerd Font
 installed would otherwise show five boxes, and Omawrite ships to machines that
