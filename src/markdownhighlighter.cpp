@@ -136,12 +136,16 @@ void MarkdownHighlighter::rebuildFormats() {
     m_headingFormat.setForeground(text);
     m_headingFormat.setFontWeight(QFont::Bold);
 
-    // Heading sizes are relative to the base font size (20px) scaled by textScale.
-    // Multipliers: H1=2.3, H2=2.1, H3=1.9, H4=1.7, H5=1.5, H6=1.3
+    // Heading sizes are multiples of the size the document is actually being
+    // written at, rather than of the size it used to default to: a heading
+    // that ignores the editor's own font size is three times the body on a
+    // small one. The multipliers are ratios of pixels and the format takes
+    // points, so 0.75 converts at Qt's logical 96 DPI -- without it every
+    // heading came out a third larger than the ratio it was given.
+    // H1=2.3, H2=2.1, H3=1.9, H4=1.7, H5=1.5, H6=1.3
     static const qreal headingSizeMultipliers[] = {2.3, 2.1, 1.9, 1.7, 1.5, 1.3};
-    const qreal baseFontSize = 20.0;
     for (int i = 0; i < 6; ++i)
-        m_headingSizes[i] = baseFontSize * headingSizeMultipliers[i] * m_textScale;
+        m_headingSizes[i] = editorPixelSize * headingSizeMultipliers[i] * 0.75;
 
     m_boldFormat = QTextCharFormat();
     m_boldFormat.setFontWeight(QFont::Bold);

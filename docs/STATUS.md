@@ -1,6 +1,6 @@
 # Status
 
-Last updated 2026-09-17.
+Last updated 2026-09-19.
 
 A fork of [omacom/omawrite](https://github.com/omacom/omawrite), the Markdown
 writing app Omarchy 4.0 ships. Upstream keeps it deliberately minimal. This fork
@@ -10,13 +10,13 @@ drive.
 
 ## Where it is
 
-Branch `custom`, 110 commits ahead of `origin/master` (upstream `8f98892`).
-116 tests pass. Clean build, no warnings. Pushed to
+Branch `agent-panel`, 121 commits ahead of `origin/master` (upstream `8f98892`),
+off `custom`. 136 tests pass. Clean build, no warnings. Pushed to
 [johnkattenhorn/omawrite](https://github.com/johnkattenhorn/omawrite).
 
 ```sh
 ./bin/build    # build/omawrite
-./bin/test     # 116 passing
+./bin/test     # 136 passing
 ```
 
 ## What is in it
@@ -53,6 +53,12 @@ Written here:
   the way a terminal does it, with a line in the footer that fades. A
   `PointHandler` does the watching; `Ctrl+Shift+C` turns it off, persisted under
   the `editor` settings category.
+- **Wrap at 80 columns** (`Ctrl+J`) — the convention Markdown files are held
+  to, as the other half of the unwrap. It joins the paragraph before it fills
+  it, so a file wrapped at 72 comes out at 80 rather than at 72 with the
+  overhang tucked under; headings, tables, code, front matter and breaks keep
+  their own lines, and a word longer than the measure overhangs rather than
+  being cut. `wrapColumns` sets the measure.
 - **Unwrap hard-wrapped lines** (`Ctrl+Shift+J`) — pasted text wrapped at a
   column goes back to one line per paragraph, leaving every newline that means
   something: blank lines, list items, quotes, tables, headings, fences,
@@ -61,6 +67,28 @@ Written here:
 - **Escape dismisses the external-change prompt** — it answers nothing, so a
   file removed outside Omawrite stays removed and the writing carries on. An
   explicit `Ctrl+S` is what answers it.
+- **Claude panel** (`Alt+G`) — a dock on the right where Claude answers beside
+  the document rather than in a terminal in the next tile. One turn is one
+  `claude -p --output-format stream-json` child, started in the folder the
+  document lives in, with the question on stdin and the answer streamed back.
+  It is told the path, the caret line and the selection, and that the running
+  window answers `--read`. The buffer is saved before a turn, so an edit the
+  agent makes reloads without the external-change prompt.
+  Conversations are filed under the document they are about and kept across
+  restarts, session id included, so a turn after a restart carries on rather
+  than starting over. [`docs/AGENT.md`](AGENT.md) has the rest, including the
+  permission mode (`acceptEdits`: edits land, shell commands are refused) and
+  what it costs.
+- **Omamail's chrome** — the AI control sits at the footer's right edge as
+  Omamail's sits at its header's, the icons are Nerd Font glyphs from the
+  Material Design Icons range the Omarchy shell draws from, and they are drawn
+  at Omamail's `dim` mix rather than a fixed grey behind 0.55 opacity. The
+  drawn icons stay as the fallback for a machine with no Nerd Font. The window
+  is drawn in the desktop's font at 12, document included, with the bundled
+  iA Writer Mono S as the fallback; heading sizes follow the document's own
+  size rather than a hardcoded 20px. The writing column fills the window and
+  narrows as the docks take their width, with a one-time move off the old
+  65-character default.
 - **Preview scroll sync** — the toggle used to drop the reader at the top.
 - **Link hover** — reworked from #8 onto #40's existing hover, rather than
   adding a third MouseArea over the editor.
@@ -83,3 +111,7 @@ Written here:
   choosing which one is not yet answered.
 - The preview keeps its place through a toggle, but it does not follow the
   caret while you write.
+- The Claude panel is phase one: it answers, and its edits reach the editor
+  through the file. Insert-at-cursor and replace-the-selection from an answer,
+  a D-Bus write call so an agent edit is one undoable mutation, and a queue for
+  a question asked mid-turn are all still to build.

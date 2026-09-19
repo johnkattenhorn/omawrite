@@ -4,16 +4,20 @@ A dead-simple Markdown writing app built with Qt Quick and C++ that automaticall
 
 > **This is a fork.** [omacom/omawrite](https://github.com/omacom/omawrite) is
 > deliberately minimal and stays that way on purpose. This branch takes 21 of
-> its open pull requests and adds two things nobody had built, so it has tabs, a
-> file sidebar, a preview that renders local images, wikilinks, checkboxes,
-> focus mode, image paste, and a command line that reaches the running window
-> over D-Bus.
+> its open pull requests, so it has tabs, a file sidebar, a preview that
+> renders local images, wikilinks, checkboxes and focus mode.
 >
-> 105 commits, 112 tests. Merging those pull requests meant reconciling
-> contributors' designs rather than resolving conflict markers, and
+> The rest is written here, because nobody had built it: pasting an image,
+> copy on select, wrapping and unwrapping Markdown at 80 columns, a command
+> line that reaches the running window over D-Bus, and Claude in a panel beside
+> the document with a conversation per file that survives a restart.
+>
+> 137 tests. Merging those pull requests meant reconciling contributors'
+> designs rather than resolving conflict markers, and
 > [`docs/DECISIONS.md`](docs/DECISIONS.md) records the calls that are not
 > obvious from the diff. [`docs/STATUS.md`](docs/STATUS.md) says what was taken,
-> what was left, and why.
+> what was left, and why, and [`docs/AGENT.md`](docs/AGENT.md) covers the
+> panel.
 
 <img width="2948" height="3227" alt="screenshot-2026-06-23_15-24-08" src="https://github.com/user-attachments/assets/4e930c0d-edda-4046-b444-a59eff523329" />
 <img width="2948" height="3227" alt="screenshot-2026-06-23_15-23-23" src="https://github.com/user-attachments/assets/8ced7c26-961b-4ded-b263-84403001a951" />
@@ -86,12 +90,20 @@ window is closed while `--open` does not.
   and hands the keyboard back to the text — it never reaches into the panel
   while you are writing. It starts closed.
 - `Ctrl+Shift+P` toggles the Markdown preview.
+- `Alt+G` opens the Claude panel on the right of the window, and closes it
+  again. See [Claude beside the document](docs/AGENT.md).
+- `Ctrl+T` opens a tab, `Ctrl+W` closes the one in front, and `Ctrl+Tab` and
+  `Ctrl+Shift+Tab` move between them. `Ctrl+Shift+PgUp` and `Ctrl+Shift+PgDown`
+  move a tab along the strip. Tabs come back where you left them when Omawrite
+  starts, and the strip only appears once there are two.
 - `Ctrl+N` opens a new Omawrite window.
 - `Ctrl+Z`, `Ctrl+Shift+Z`, and `Ctrl+Y` handle undo and redo.
 - `Super+F` toggles fullscreen. Qt maps this key as `Meta+F`.
 - `Ctrl+F` searches the document. Use `Enter` or `Ctrl+G` for the next match and `Shift+Enter` for the previous match.
 - `Ctrl+H` opens find and replace.
 - `Ctrl+B`, `Ctrl+I`, and `Ctrl+Shift+X` toggle bold, italic, and strikethrough Markdown. `Ctrl+K` inserts a link.
+- `Ctrl+L` turns a list item into a checkbox, and ticks or unticks one that
+  already is. Clicking the box does the same.
 - `Tab` and `Shift+Tab` nest and unnest list items. Bullets and numbers line up under
   the item above them, and ordered lists renumber themselves.
 - `Ctrl+Click` or `Ctrl+Enter` follows a link: Obsidian `[[wikilinks]]` open the note in Omawrite, `https://` and markdown `[text](url)` links open in the browser.
@@ -101,6 +113,16 @@ window is closed while `--open` does not.
   is on the clipboard, the way a terminal does it, and the footer says how many
   characters for a moment. `Ctrl+Shift+C` turns it off and on, and it stays as
   you left it.
+- `Ctrl+J` wraps Markdown at 80 columns — the convention most Markdown files
+  are held to. It reflows rather than folds: lines already broken somewhere
+  else are joined first, so a file wrapped at 72 comes out at 80 instead of 72
+  with the overhang tucked underneath. Headings, tables, fenced and indented
+  code, front matter and thematic breaks keep their own line breaks, list
+  items hang their continuations, quotes carry their marker down, and a word
+  longer than the measure goes on a line of its own rather than being cut in
+  half. Set `wrapColumns` under `[layout]` for a different measure. With a
+  selection it takes the selected lines, without one the whole document, and
+  `Ctrl+Z` puts it back in a single step.
 - `Ctrl+Shift+J` unwraps hard-wrapped lines: text pasted out of a mail client or
   a file wrapped at 72 columns goes back to one line per paragraph. It leaves
   blank lines, list items, table rows, headings, fenced and indented code, front
@@ -141,12 +163,40 @@ starts from the document being written.
 Drag its right edge to widen it; the width is remembered, and stops short of
 squeezing the writing column below its usual measure.
 
+## Claude panel
+
+`Alt+G`, or the robot button at the top right of the window, opens a dock on the right
+and asks Claude there rather than in a terminal in the next tile. It knows
+which document is open, where the caret is and what is selected, and the turn
+runs in the folder the document lives in, so the notes beside it can be read
+without naming a path. Answers stream in as they are written. A line above the
+input says what the turn is doing and for how long, and `Escape` or `stop`
+ends it.
+
+Each document keeps its own conversation, across tab switches and across
+restarts, until you clear it with **new**. It drives the `claude` command line
+non-interactively in `acceptEdits`: Claude edits files without asking, and
+refuses anything that would otherwise need a prompt, since nothing headless can
+answer one. `allowedTools` under `[agent]` names the commands it may run
+anyway, and `permissionMode=bypassPermissions` lifts the question entirely. [docs/AGENT.md](docs/AGENT.md)
+covers what it is told, what it runs, how an edit it makes reaches the editor,
+and what has not been built yet.
+
+## Font
+
+The window is drawn in the desktop's own monospace font — JetBrainsMono Nerd
+Font where Omarchy has installed it — at 12px, document and Claude panel alike.
+A machine without it falls back to the bundled iA Writer Mono S. `Ctrl++` and
+`Ctrl+-` change the document's size and remember it; `Ctrl+0` goes back to 12.
+
 ## Measure
 
-The writing column is 65 characters wide. To change it, set `editorColumns`
-under `[layout]` in `~/.config/Omawrite/Omawrite.conf` — any width from 20
-characters up, or `0` to let the text fill the window with ten characters of
-margin on either side.
+The writing column fills the window, keeping ten characters of margin on
+either side, and gives way as the sidebar and the Claude panel take their
+width. To fix it at a measure instead, set `editorColumns` under `[layout]` in
+`~/.config/Omacom/omawrite.conf` — any width from 20 characters up. 65 is what
+Omawrite used to be. An install still carrying that old default is moved to the
+filling measure once; a measure you chose yourself is left alone.
 
 ## Saving
 

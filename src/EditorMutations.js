@@ -726,3 +726,155 @@ function unwrapPlan(text, selectionStart, selectionEnd) {
     plan.joinedLines = (region.end - region.start + 1) - result.lines.length;
     return plan;
 }
+
+// The other half of the unwrap: put the paragraph back on a measure. A
+// document is reflowed rather than folded -- lines already broken somewhere
+// else are joined first and then filled -- so wrapping a file that was
+// wrapped at 72 gives 80, not 72 with the overhang tucked under it.
+var WRAP_COLUMNS = 80;
+
+// What a wrapped line carries down its continuations: a list item hangs its
+// text under itself, a quote repeats its marker, a plain paragraph keeps its
+// indent.
+function wrapPrefixes(line) {
+    var item = listItem(line);
+    if (item !== null) {
+        var head = line.slice(0, line.length - item.content.length);
+        return { first: head, rest: indentOf(columnWidth(head)),
+                 body: item.content };
+    }
+    var quote = quoteLine(line);
+    if (quote !== null) {
+        var marker = line.slice(0, line.length - quote.content.length);
+        return { first: marker, rest: marker, body: quote.content };
+    }
+    var indent = leadingWhitespace(line);
+    return { first: indent, rest: indent, body: line.slice(indent.length) };
+}
+
+// One line filled to the measure. A word longer than the measure -- a URL,
+// mostly -- goes on a line of its own and overhangs rather than being cut in
+// half, because a broken URL is not a link any more.
+function fillLine(line, columns) {
+    var parts = wrapPrefixes(line);
+    var trailing = withoutCarriageReturn(line).match(HARD_BREAK_RE);
+    var body = trailing ? parts.body.slice(0, parts.body.length - trailing[0].length) : parts.body;
+    var words = body.split(/[ \t]+/).filter(function (word) { return word.length > 0; });
+    if (words.length === 0)
+        return [line];
+
+    var out = [];
+    var prefix = parts.first;
+    var current = "";
+    for (var i = 0; i < words.length; i++) {
+        var candidate = current.length === 0 ? words[i] : current + " " + words[i];
+        if (current.length > 0 && columnWidth(prefix + candidate) > columns) {
+            out.push(prefix + current);
+            prefix = parts.rest;
+            current = words[i];
+            continue;
+        }
+        current = candidate;
+    }
+    out.push(prefix + current);
+    if (trailing)
+        out[out.length - 1] += trailing[0];
+    return out;
+}
+
+// Where a caret lands once the same words sit on different lines: the
+// character it was in front of, counted without the whitespace that moved.
+function inkBefore(text, position) {
+    var ink = 0;
+    for (var i = 0; i < position && i < text.length; i++) {
+        if (!/[ \t\n\r]/.test(text.charAt(i)))
+            ink++;
+    }
+    return ink;
+}
+
+function positionAfterInk(text, ink) {
+    if (ink <= 0)
+        return 0;
+    var seen = 0;
+    for (var i = 0; i < text.length; i++) {
+        if (/[ \t\n\r]/.test(text.charAt(i)))
+            continue;
+        seen++;
+        if (seen === ink)
+            return i + 1;
+    }
+    return text.length;
+}
+
+function wrapLines(lines, atDocumentStart, columns) {
+    // Join first: the measure is about the paragraph, not about whatever
+    // lines it happens to be on right now.
+    var joined = unwrapLines(lines, atDocumentStart).lines;
+    var out = [];
+    var fence = null;
+    var frontMatter = atDocumentStart && joined.length > 0 && FRONT_MATTER_RE.test(joined[0]);
+
+    for (var i = 0; i < joined.length; i++) {
+        var line = joined[i];
+        var fenceMatch = line.match(FENCE_RE);
+
+        if (frontMatter) {
+            out.push(line);
+            if (i > 0 && FRONT_MATTER_RE.test(line))
+                frontMatter = false;
+            continue;
+        }
+        if (fence !== null) {
+            out.push(line);
+            if (fenceMatch && fenceMatch[1].charAt(0) === fence.charAt(0)
+                    && fenceMatch[1].length >= fence.length)
+                fence = null;
+            continue;
+        }
+        if (fenceMatch) {
+            fence = fenceMatch[1];
+            out.push(line);
+            continue;
+        }
+        // A heading, a table row, a thematic break, indented code, a
+        // reference definition: lines whose breaks are their meaning. A
+        // heading split across two lines stops being a heading at all.
+        if (blockKind(line) === "verbatim" || columnWidth(line) <= columns) {
+            out.push(line);
+            continue;
+        }
+        out = out.concat(fillLine(line, columns));
+    }
+    return out;
+}
+
+function wrapPlan(text, selectionStart, selectionEnd, columns) {
+    var measure = columns > 0 ? columns : WRAP_COLUMNS;
+    var from = Math.min(selectionStart, selectionEnd);
+    var to = Math.max(selectionStart, selectionEnd);
+    var doc = documentLines(text);
+    var region;
+    if (from === to) {
+        region = { start: 0, end: doc.lines.length - 1 };
+    } else {
+        var firstLine = lineIndexAt(doc, from);
+        var lastLine = lineIndexAt(doc, to);
+        if (lastLine > firstLine && doc.starts[lastLine] === to)
+            lastLine--;
+        region = { start: firstLine, end: lastLine };
+    }
+
+    var oldLines = doc.lines.slice(region.start, region.end + 1);
+    var newLines = wrapLines(oldLines, region.start === 0, measure);
+    var oldText = oldLines.join("\n");
+    var newText = newLines.join("\n");
+    var regionStart = doc.starts[region.start];
+    var plan = linesPlan(doc, region, newLines,
+                         positionAfterInk(newText, inkBefore(oldText, from - regionStart)),
+                         positionAfterInk(newText, inkBefore(oldText, to - regionStart)));
+    if (plan === null)
+        return null;
+    plan.wrappedLines = newLines.length - oldLines.length;
+    return plan;
+}

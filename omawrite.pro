@@ -11,6 +11,7 @@ HEADERS += \
     src/workspacesession.h \
     src/windowmanager.h \
     src/remote.h \
+    src/agentsession.h \
     src/backend.h \
     src/cli.h \
     src/markdownhighlighter.h \
@@ -22,6 +23,7 @@ SOURCES += \
     src/workspacesession.cpp \
     src/windowmanager.cpp \
     src/remote.cpp \
+    src/agentsession.cpp \
     src/backend.cpp \
     src/cli.cpp \
     src/markdownhighlighter.cpp \

@@ -21,6 +21,7 @@
 #include <QQuickTextDocument>
 #include <QRegularExpression>
 #include <QScreen>
+#include <QFontDatabase>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QJsonDocument>
@@ -45,11 +46,12 @@
 constexpr qreal typoraLineHeightPercent = 140;
 const QString lastSaveDirectorySetting = QStringLiteral("file/lastSaveDirectory");
 const QString editorFontSizeSetting = QStringLiteral("editor/fontSize");
-constexpr int defaultEditorFontSize = 20;
+constexpr int defaultEditorFontSize = 12;
 constexpr int minimumEditorFontSize = 10;
 constexpr int maximumEditorFontSize = 48;
 const QString browseDirectorySetting = QStringLiteral("file/browseDirectory");
 const QString sidebarWidthSetting = QStringLiteral("window/sidebarWidth");
+const QString agentPanelWidthSetting = QStringLiteral("window/agentPanelWidth");
 
 class PreviewDocument final : public QTextDocument {
 public:
@@ -256,6 +258,7 @@ Backend::Backend(WorkspaceSession *workspaceSession, const QString &windowId, QO
 }
 
 void Backend::initializeRuntime() {
+    adoptFillingMeasure();
     m_wordCountTimer.setSingleShot(true);
     m_wordCountTimer.setInterval(120);
     connect(&m_wordCountTimer, &QTimer::timeout, this, &Backend::refreshWordCount);
@@ -531,6 +534,14 @@ int Backend::sidebarWidth() const {
 
 void Backend::saveSidebarWidth(int width) {
     QSettings().setValue(sidebarWidthSetting, width);
+}
+
+int Backend::agentPanelWidth() const {
+    return QSettings().value(agentPanelWidthSetting, 380).toInt();
+}
+
+void Backend::saveAgentPanelWidth(int width) {
+    QSettings().setValue(agentPanelWidthSetting, width);
 }
 
 void Backend::open(const QUrl &url) {
@@ -1995,6 +2006,35 @@ QDir Backend::defaultDirectory() const {
 
 QString Backend::currentDocumentText() const {
     return m_document ? m_document->toPlainText() : QString();
+}
+
+void Backend::adoptFillingMeasure() {
+    QSettings settings;
+    const QString migrated = QStringLiteral("layout/measureFills");
+    if (settings.value(migrated).toBool())
+        return;
+    settings.setValue(migrated, true);
+    // 65 was the old default, so a stored 65 is almost certainly nobody's
+    // decision. Anything else is, and stays.
+    if (settings.value(QStringLiteral("layout/editorColumns")).toInt() == 65)
+        settings.setValue(QStringLiteral("layout/editorColumns"), 0);
+}
+
+QString Backend::appFont() {
+    static const QString family = []() {
+        const QStringList installed = QFontDatabase::families();
+        const QStringList preferred{
+            QStringLiteral("JetBrainsMono Nerd Font"),
+            QStringLiteral("JetBrainsMono NF"),
+            QStringLiteral("JetBrains Mono"),
+        };
+        for (const QString &candidate : preferred) {
+            if (installed.contains(candidate))
+                return candidate;
+        }
+        return QStringLiteral("iA Writer Mono S");
+    }();
+    return family;
 }
 
 int Backend::countWords(const QString &text) {

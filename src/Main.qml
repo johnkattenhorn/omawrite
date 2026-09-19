@@ -21,6 +21,21 @@ ApplicationWindow {
     readonly property color textColor: backend.themeForeground
     readonly property color strongTextColor: backend.themeForeground
     readonly property color mutedColor: darkMode ? "#909191" : "#aeb1b5"
+    // The two dimmed strengths Omamail draws its chrome at, mixed from the
+    // theme rather than fixed, so an icon here is as dark as the same icon in
+    // the mail window: dim for anything you act on, dimmer a step behind it.
+    // The desktop's own face, as Omamail is drawn in, for the whole window
+    // including the document. Backend::appFont settles which one that is and
+    // falls back to the bundled writing font where there is no other.
+    readonly property string appFont: backend.appFont
+    readonly property color dimColor: Qt.rgba(
+        textColor.r * 0.68 + pageColor.r * 0.32,
+        textColor.g * 0.68 + pageColor.g * 0.32,
+        textColor.b * 0.68 + pageColor.b * 0.32, 1)
+    readonly property color dimmerColor: Qt.rgba(
+        textColor.r * 0.45 + pageColor.r * 0.55,
+        textColor.g * 0.45 + pageColor.g * 0.55,
+        textColor.b * 0.45 + pageColor.b * 0.55, 1)
     readonly property color selectionFill: backend.themeSelection
     // The desktop's text size knob (GNOME's text-scaling-factor, which
     // `omarchy display text size` drives) anchored so its 12px default leaves
@@ -29,10 +44,11 @@ ApplicationWindow {
     readonly property int editorFontPixelSize: scaledSize(backend.editorFontSize)
     // Never wider than the Flickable's viewport, whatever the measure asks for:
     // a tiling compositor can resize the window below its minimum width.
+    readonly property int dockedWidth: fileSidebar.width + agentPanel.width
     readonly property int availableEditorWidth: Math.min(
-        Math.max(360, width - fileSidebar.width
+        Math.max(360, width - dockedWidth
                  - Math.round(writerFontMetrics.averageCharacterWidth * 20)),
-        Math.max(0, width - fileSidebar.width - 48))
+        Math.max(0, width - dockedWidth - 48))
     readonly property int editorWidth: layoutSettings.editorColumns > 0
         ? Math.min(Math.round(writerFontMetrics.averageCharacterWidth
                               * Math.max(20, layoutSettings.editorColumns)),
@@ -41,6 +57,8 @@ ApplicationWindow {
     property bool searchOpen: false
     property bool sidebarOpen: false
     property int sidebarLogicalWidth: 240
+    property bool agentOpen: false
+    property int agentLogicalWidth: 380
     property bool searchUpdating: false
     property var searchMatches: []
     property int searchMatchIndex: -1
@@ -53,13 +71,18 @@ ApplicationWindow {
     Material.accent: backend.themeAccent
     color: pageColor
 
-    // Editor measure in average character widths. 65, the default, is the
-    // measure Omawrite has always had; 0 lets the text fill the window instead,
-    // keeping ten characters of margin on either side.
+    // Editor measure in average character widths. 0, the default, lets the
+    // text fill the window with ten characters of margin on either side, so
+    // the column gives way as the sidebar and the panel take their width. A
+    // number fixes the measure instead: 65 is what Omawrite used to have.
     Settings {
         id: layoutSettings
         category: "layout"
-        property int editorColumns: 65
+        property int editorColumns: 0
+        // What Ctrl+J wraps to. 80 is the convention Markdown files are
+        // usually held to; it is not the same question as how wide the
+        // writing column is drawn.
+        property int wrapColumns: 80
     }
 
     // Copy on select, the way a terminal does it. Persisted, because someone
@@ -93,6 +116,33 @@ ApplicationWindow {
 
     function toggleSidebar() {
         setSidebarOpen(!sidebarOpen);
+    }
+
+    function setAgentOpen(open) {
+        agentOpen = open;
+        if (open)
+            agentPanel.focusInput();
+        else
+            editor.forceActiveFocus();
+    }
+
+    function toggleAgent() {
+        setAgentOpen(!agentOpen);
+    }
+
+    // The caret's line, as a person counts them, so a question about "this
+    // paragraph" has somewhere to start.
+    function caretLine() {
+        return editor.text.substring(0, editor.cursorPosition).split("\n").length;
+    }
+
+    // Save before asking: the agent reads the file, and the file should be the
+    // text on screen. It also leaves the buffer unmodified, which is what lets
+    // an edit the agent makes reload without a prompt.
+    function askAgent(question) {
+        backend.saveNow();
+        agent.ask(question, backend.fileUrl, caretLine(), editor.selectedText,
+                  backend.folderUrl);
     }
 
     function requestOpen(url) {
@@ -207,7 +257,7 @@ ApplicationWindow {
 
     FontMetrics {
         id: writerFontMetrics
-        font.family: "iA Writer Mono S"
+        font.family: win.appFont
         font.pixelSize: win.editorFontPixelSize
     }
 
@@ -534,6 +584,15 @@ ApplicationWindow {
         onActivated: editor.unwrapWrappedLines()
     }
 
+    // The other direction, on the key beside it.
+    Shortcut {
+        objectName: "wrapShortcut"
+        sequence: "Ctrl+J"
+        context: Qt.WindowShortcut
+        enabled: !win.previewVisible
+        onActivated: editor.wrapToMeasure()
+    }
+
     Shortcut {
         objectName: "copyOnSelectShortcut"
         sequence: "Ctrl+Shift+C"
@@ -566,6 +625,14 @@ ApplicationWindow {
         sequence: "Ctrl+O"
         context: Qt.ApplicationShortcut
         onActivated: backend.openDialog()
+    }
+
+    // Alt+G, as Omamail's panel takes, so the two docks answer the same key.
+    Shortcut {
+        objectName: "agentShortcut"
+        sequence: "Alt+G"
+        context: Qt.ApplicationShortcut
+        onActivated: win.toggleAgent()
     }
 
     Shortcut {
@@ -712,6 +779,7 @@ ApplicationWindow {
         textScale: win.textScale
         textColor: win.textColor
         strongTextColor: win.strongTextColor
+        fontFamily: win.appFont
         containerWidth: win.width
         containerHeight: win.height
 
@@ -730,7 +798,7 @@ ApplicationWindow {
         x: Math.round((win.width - width) / 2)
         y: Math.round((win.height - height) / 2)
         contentItem: Label {
-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Shift+J  Unwrap hard-wrapped lines\nCtrl+Shift+C  Copy on select on/off\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+/  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
+            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nAlt+G  Claude\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+J  Wrap at 80 columns\nCtrl+Shift+J  Unwrap hard-wrapped lines\nCtrl+Shift+C  Copy on select on/off\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+/  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
             lineHeight: 1.5
         }
     }
@@ -749,6 +817,7 @@ ApplicationWindow {
         mutedColor: win.mutedColor
         accentColor: backend.themeAccent
         selectionFill: win.selectionFill
+        fontFamily: win.appFont
         folderUrl: backend.folderUrl
         folderName: backend.folderName
         folderHasParent: backend.folderHasParent
@@ -780,9 +849,66 @@ ApplicationWindow {
         onDismissed: editor.forceActiveFocus()
     }
 
+    AgentPanel {
+        id: agentPanel
+        objectName: "agentPanel"
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        expanded: win.agentOpen
+        darkMode: win.darkMode
+        textScale: win.textScale
+        pageColor: win.pageColor
+        textColor: win.textColor
+        mutedColor: win.dimColor
+        accentColor: backend.themeAccent
+        selectionFill: win.selectionFill
+        messages: agent.messages
+        running: agent.running
+        available: agent.available
+        activity: agent.activity
+        documentName: backend.fileName
+        fontFamily: win.appFont
+        logicalWidth: win.agentLogicalWidth
+        // Never let the panel squeeze the writing column below its minimum.
+        maximumLogicalWidth: Math.max(minimumLogicalWidth,
+                                      Math.round(win.width / win.textScale)
+                                      - 420 - Math.round(fileSidebar.width / win.textScale))
+
+        onAsked: function(question) { win.askAgent(question); }
+        onInterrupted: agent.interrupt()
+        onNewChatRequested: agent.newChat()
+        onWidthChangeRequested: function(width) { win.agentLogicalWidth = width; }
+        onWidthCommitted: backend.saveAgentPanelWidth(win.agentLogicalWidth)
+        onDismissed: win.setAgentOpen(false)
+    }
+
     Item {
         anchors.fill: parent
         anchors.leftMargin: fileSidebar.width
+        anchors.rightMargin: agentPanel.width
+
+        // Omamail keeps its AI control at the window's top right, away from the
+        // verbs that act on what is in front of you. Same corner here, above
+        // the writing rather than in a header Omawrite does not have, and it
+        // stays put when the panel slides the writing column along.
+        FooterIconButton {
+            id: agentButton
+            objectName: "agentButton"
+            iconName: "assistant"
+            // robot-outline, the glyph Omamail's agent button draws, from the
+            // Material Design Icons range the Omarchy shell uses.
+            glyph: 0xF167A
+            glyphOffset: -1
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.rightMargin: 12
+            anchors.topMargin: 12
+            z: 3
+            iconColor: win.agentOpen ? win.textColor : win.dimColor
+            tooltip: "Claude · Alt+G"
+            onClicked: win.toggleAgent()
+        }
 
         // A surface rather than a bare Item: the document scrolls behind this,
         // and with nothing opaque the text showed through the gaps between the
@@ -805,7 +931,7 @@ ApplicationWindow {
                 anchors.fill: parent
                 anchors.topMargin: 8
                 anchors.leftMargin: 12
-                anchors.rightMargin: 12
+                anchors.rightMargin: 12 + agentButton.width + 12
                 clip: true
                 contentWidth: tabStrip.width
                 contentHeight: height
@@ -843,7 +969,7 @@ ApplicationWindow {
                                 color: modelData.id === backend.activeBufferId
                                     ? "white"
                                     : win.textColor
-                                font.family: "iA Writer Mono S"
+                                font.family: win.appFont
                                 font.pixelSize: win.scaledSize(11)
                             }
 
@@ -870,7 +996,7 @@ ApplicationWindow {
                                     text: "\u00d7"
                                     color: tabLabel.color
                                     opacity: closeArea.containsMouse ? 1 : 0.5
-                                    font.family: "iA Writer Mono S"
+                                    font.family: win.appFont
                                     font.pixelSize: win.scaledSize(13)
                                 }
 
@@ -1182,7 +1308,7 @@ ApplicationWindow {
                 color: win.textColor
                 selectedTextColor: win.strongTextColor
                 selectionColor: win.selectionFill
-                font.family: "iA Writer Mono S"
+                font.family: win.appFont
                 font.pixelSize: win.editorFontPixelSize
                 font.weight: Font.Normal
                 property bool hoveringLink: false
@@ -1305,6 +1431,32 @@ ApplicationWindow {
                 // column of lines. This joins each wrapped paragraph back onto
                 // one line: the selected ones, or the whole document when
                 // nothing is selected. One undo puts it back.
+                // Put the prose back on a measure: 80 columns by default,
+                // the selected lines or the whole document. Headings, tables,
+                // code and front matter keep their own line breaks, and one
+                // undo puts the lot back.
+                function wrapToMeasure() {
+                    forceActiveFocus();
+                    var plan = EditorMutations.wrapPlan(text, selectionStart, selectionEnd,
+                                                        layoutSettings.wrapColumns);
+                    if (!plan) {
+                        win.flashNotice("Already within "
+                                        + layoutSettings.wrapColumns + " columns");
+                        return;
+                    }
+                    backend.beginUndoBlock();
+                    try {
+                        applyPlan(plan);
+                    } finally {
+                        backend.endUndoBlock();
+                    }
+                    win.flashNotice(plan.wrappedLines === 1
+                                    ? "Wrapped at " + layoutSettings.wrapColumns
+                                      + ", 1 line added"
+                                    : "Wrapped at " + layoutSettings.wrapColumns + ", "
+                                      + plan.wrappedLines + " lines added");
+                }
+
                 function unwrapWrappedLines() {
                     forceActiveFocus();
                     var plan = EditorMutations.unwrapPlan(text, selectionStart, selectionEnd);
@@ -1755,7 +1907,7 @@ ApplicationWindow {
                 selectByMouse: true
                 wrapMode: TextEdit.Wrap
                 color: win.textColor
-                font.family: "iA Writer Mono S"
+                font.family: win.appFont
                 font.pixelSize: win.editorFontPixelSize
                 renderType: editor.renderType
                 onWidthChanged: backend.setPreviewWidth(width)
@@ -1799,7 +1951,7 @@ ApplicationWindow {
                 elide: Text.ElideMiddle
                 color: win.mutedColor
                 opacity: 0.75
-                font.family: "iA Writer Mono S"
+                font.family: win.appFont
                 font.pixelSize: win.scaledSize(11)
             }
         }
@@ -1820,12 +1972,12 @@ ApplicationWindow {
                 anchors.leftMargin: 12
                 anchors.bottomMargin: 10
                 spacing: 12
-                opacity: 0.55
 
                 FooterIconButton {
                     objectName: "saveButton"
                     iconName: "save"
-                    iconColor: win.mutedColor
+                    glyph: 0xF0818  // content-save-outline
+                    iconColor: win.dimColor
                     tooltip: "Save"
                     onClicked: backend.save()
                 }
@@ -1833,7 +1985,8 @@ ApplicationWindow {
                 FooterIconButton {
                     objectName: "openButton"
                     iconName: "open"
-                    iconColor: win.mutedColor
+                    glyph: 0xF0DCF  // folder-open-outline
+                    iconColor: win.dimColor
                     tooltip: "Open"
                     onClicked: backend.openDialog()
                 }
@@ -1841,7 +1994,8 @@ ApplicationWindow {
                 FooterIconButton {
                     objectName: "filesButton"
                     iconName: "files"
-                    iconColor: win.mutedColor
+                    glyph: 0xF10AA  // dock-left, the glyph Omamail's sidebar takes
+                    iconColor: win.dimColor
                     tooltip: "Files"
                     onClicked: win.setSidebarOpen(!win.sidebarOpen)
                 }
@@ -1849,7 +2003,8 @@ ApplicationWindow {
                 FooterIconButton {
                     objectName: "modeToggle"
                     iconName: "preview"
-                    iconColor: win.mutedColor
+                    glyph: 0xF06D0  // eye-outline
+                    iconColor: win.dimColor
                     tooltip: win.previewVisible ? "Editor" : "Preview"
                     onClicked: win.togglePreview()
                 }
@@ -1857,7 +2012,8 @@ ApplicationWindow {
                 Label {
                     text: backend.status
                     color: win.mutedColor
-                    font.family: "iA Writer Mono S"
+                    opacity: 0.55
+                    font.family: win.appFont
                     font.pixelSize: win.scaledSize(11)
                     visible: text !== ""
                     elide: Text.ElideRight
@@ -1880,7 +2036,7 @@ ApplicationWindow {
                 text: win.notice
                 color: win.mutedColor
                 opacity: win.notice.length > 0 ? 0.9 : 0
-                font.family: "iA Writer Mono S"
+                font.family: win.appFont
                 font.pixelSize: win.scaledSize(11)
 
                 Behavior on opacity {
@@ -1897,7 +2053,7 @@ ApplicationWindow {
                 text: backend.wordCount + (backend.wordCount === 1 ? " Word" : " Words")
                 color: win.mutedColor
                 opacity: 0.75
-                font.family: "iA Writer Mono S"
+                font.family: win.appFont
                 font.pixelSize: win.scaledSize(11)
             }
         }
@@ -2036,27 +2192,39 @@ ApplicationWindow {
 
                 SearchIconButton {
                     iconName: "up"
-                    iconColor: win.darkMode ? win.textColor : "#62635f"
+                    glyph: 0xF0143  // chevron-up
+                    iconColor: win.dimColor
                     onClicked: win.moveSearch(-1)
                 }
 
                 SearchIconButton {
                     iconName: "down"
-                    iconColor: win.darkMode ? win.textColor : "#62635f"
+                    glyph: 0xF0140  // chevron-down
+                    iconColor: win.dimColor
                     onClicked: win.moveSearch(1)
                 }
 
                 SearchIconButton {
                     iconName: "close"
-                    iconColor: win.darkMode ? win.textColor : "#62635f"
+                    glyph: 0xF0156  // close
+                    iconColor: win.dimColor
                     onClicked: win.closeSearch()
                 }
             }
         }
     }
 
+    // A conversation belongs to a document, so it follows the tab: switching
+    // shows that document's chat, and the one being left is kept.
+    Connections {
+        target: backend
+        function onFileUrlChanged() { agent.showDocument(backend.fileUrl); }
+    }
+
     Component.onCompleted: {
+        agent.showDocument(backend.fileUrl);
         sidebarLogicalWidth = backend.sidebarWidth();
+        agentLogicalWidth = backend.agentPanelWidth();
         var geometry = backend.windowGeometry();
         if (geometry.x >= 0) x = geometry.x;
         if (geometry.y >= 0) y = geometry.y;

@@ -6,7 +6,26 @@ Button {
     id: control
 
     property string iconName
+    // The Material Design Icons codepoint to draw instead, when the machine
+    // has a Nerd Font to draw it with. See FooterIconButton.
+    property int glyph: 0
     property color iconColor: "#666666"
+
+    readonly property string nerdFamily: {
+        const installed = Qt.fontFamilies();
+        const preferred = ["Symbols Nerd Font Mono", "Symbols Nerd Font",
+                           "JetBrainsMono Nerd Font"];
+        for (var i = 0; i < preferred.length; i++) {
+            if (installed.indexOf(preferred[i]) >= 0)
+                return preferred[i];
+        }
+        for (var j = 0; j < installed.length; j++) {
+            if (installed[j].indexOf("Nerd Font") >= 0)
+                return installed[j];
+        }
+        return "";
+    }
+    readonly property bool drawsGlyph: glyph > 0 && nerdFamily !== ""
 
     implicitWidth: 42
     implicitHeight: 42
@@ -20,8 +39,18 @@ Button {
     }
 
     contentItem: Item {
+        Text {
+            anchors.centerIn: parent
+            visible: control.drawsGlyph
+            text: control.drawsGlyph ? String.fromCodePoint(control.glyph) : ""
+            color: control.iconColor
+            font.family: control.nerdFamily
+            font.pixelSize: 20
+        }
+
         Canvas {
             id: iconCanvas
+            visible: !control.drawsGlyph
             anchors.centerIn: parent
 
             // Canvas rasterizes one surface pixel per logical pixel and gets

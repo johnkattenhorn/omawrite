@@ -2,6 +2,189 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-19 — Wrapping reflows the paragraph rather than folding the line
+
+`Ctrl+Shift+J` took hard-wrapped prose back to one line per paragraph.
+`Ctrl+J` is the other direction, for the 80-column convention most Markdown
+files are held to.
+
+It joins before it fills. Folding each line where it stands would take a file
+wrapped at 72 and leave it at 72 with a few words tucked under each line; the
+measure is a property of the paragraph, not of whatever lines it happens to be
+on, so the unwrap runs first and the fill runs over its result. That also means
+one implementation decides what counts as a paragraph, and `Ctrl+J` then
+`Ctrl+Shift+J` returns the document it started from.
+
+A line whose breaks are its meaning is left alone however long it is: a
+heading, a table row, a thematic break, a reference definition, fenced and
+indented code, front matter. A heading folded in two stops being a heading, and
+a folded table row stops being a table. A word longer than the measure — a URL,
+mostly — takes a line of its own and overhangs, because a URL broken across two
+lines is not a link.
+
+`wrapColumns` is a separate setting from `editorColumns`. How wide the writing
+column is drawn and what the file is wrapped to are two questions, and a writer
+who wants a full-width column and an 80-column file should not have to choose.
+
+## 2026-09-19 — A conversation belongs to a document, and outlives the window
+
+The panel started as one chat per window, held in memory. Two sittings with it
+showed what that costs: a rebuild and a restart during testing took a
+conversation with it, and what was lost was not the transcript but the thread
+of an argument being worked out — in that case whether Omawrite should help
+hold Markdown to 80 columns.
+
+So a chat is filed under the document it is about. Switching tabs switches the
+conversation; switching back brings it back; closing Omawrite keeps them. The
+store is `agent.json` in the same state directory as the tabs, 0600, the forty
+most recently used documents, 64 messages each, oldest dropped first. It is
+read-modify-written rather than overwritten, because two windows can hold it at
+once and a blind write would take the other window's chat with it.
+
+What makes it worth doing rather than decorative is the session id. The
+transcript alone would be a picture of a conversation Claude no longer has;
+kept beside it, the next turn resumes the same session and the model still
+knows what was being argued. A session can be gone by then — cleared, expired,
+or left on another machine — so a resumed turn that fails says exactly that,
+drops the id, and lets the next question start cleanly, rather than failing the
+same way for ever.
+
+A turn already running when the writer changes tab keeps its chat: the answer
+belongs to the document that asked for it, so the swap waits for it. **new**
+clears the kept copy as well as the screen, because clearing is the one gesture
+that means "do not bring this back".
+
+The transcripts are on disk now, which the panel's first version deliberately
+avoided. They are the writer's own questions about their own documents, and
+Claude Code already keeps its full session transcripts under `~/.claude`; this
+adds a smaller copy next to the tabs rather than a new kind of record.
+
+## 2026-09-19 — The measure fills the window, and the docks take from it
+
+The column was 65 characters, which is a good measure for a page and the wrong
+one for a window with two docks in it: at 12px the text sat in the middle with
+the sidebar and the panel opening into space it was never using.
+
+It fills the width now, ten characters of margin either side, and
+`availableEditorWidth` already subtracted whatever the docks were taking — so
+opening either one narrows the column rather than sliding over it, and closing
+it gives the width back. `editorColumns` still fixes a measure for anyone who
+wants one.
+
+A stored 65 is moved to 0 once, behind a `layout/measureFills` flag, because 65
+was the default rather than a choice: an install that had never touched the
+setting would otherwise keep the old column for ever. Any other number is
+somebody's decision and is left where it is.
+
+## 2026-09-19 — The chrome follows Omamail, down to the mix
+
+Omamail is the other Qt window in this desktop doing the same kind of work, so
+it is the standard this fork measures its chrome against rather than inventing
+a second one.
+
+Four things come from it. The AI control sits at the window's top right, where
+Omamail's is: above the writing rather than in a header Omawrite does not have,
+and clear of the verbs in the footer that act on the document. The tab strip
+stops short of it rather than scrolling underneath. The icons are Nerd Font glyphs
+from the Material Design Icons range the Omarchy shell draws its own bar from,
+so a verb in the editor looks like the same verb on the desktop —
+`content-save-outline`, `folder-open-outline`, `dock-left`, `eye-outline`, and
+`robot-outline` for the agent, which is the glyph Omamail's own AI button
+draws. And they are drawn at Omamail's `dim`, which is 68% foreground over 32%
+background mixed from the live theme, rather than at a fixed grey behind 0.55
+opacity: the old footer read as decoration you were meant to ignore.
+
+The whole window is drawn in the desktop's font at Omamail's sizes -- 12 for
+the text, 11 for the chrome around it -- rather than in iA Writer Mono S at 13
+and 20. That started with the panel, where the narrower face shows more of an
+answer at once, and then the document followed it: a panel and a page side by
+side in two faces at two sizes read as two applications. `Backend::appFont`
+settles which face that is once, preferring JetBrainsMono and falling back to
+the bundled iA Writer Mono S, which is still what a machine without it gets.
+
+The heading sizes had to move with it. They were multiples of a hardcoded
+20px, so on a 12px document an H1 came out three times the body; they are
+multiples of the size the document is actually set in now. The same line fixed
+a ratio that had always been a third too large: the multipliers are ratios of
+pixels and `setFontPointSize` takes points, so they now convert at Qt's
+logical 96 DPI.
+
+The drawn icons stay in the file as a fallback. A machine with no Nerd Font
+installed would otherwise show five boxes, and Omawrite ships to machines that
+are not this one. `FooterIconButton` picks the first Nerd family it finds and
+falls back to the Canvas path when it finds none, so the question is answered
+per machine rather than at build time.
+
+## 2026-09-19 — Claude writes beside the document, in a panel the window owns
+
+Working with an agent on a document has meant a terminal in the next tile: it
+knows the folder, and nothing about the writing. It cannot see which file is in
+front of you, where the caret is, or what you just selected, so every question
+starts by typing a path. The panel exists to close that gap, not to add a chat
+window.
+
+[Omamail](https://github.com/huacnlee/omamail) had already built the shape —
+`docs/AGENT.md` there is a full account of it — and it is the same stack, Qt
+and QML over a native backend. What is taken from it: a dock on the right, a
+child process per turn, `claude -p --output-format stream-json
+--include-partial-messages`, the question on stdin rather than in an argument,
+`--resume <id> --fork-session` for a follow-up, and a panel that shows answer
+text and public status but never raw tool arguments or reasoning.
+
+What is deliberately different is the working directory. Omamail runs the CLI
+in a private per-turn state directory and hands it mail as JSON, because mail
+is not a file. A document is a file, so the panel runs the CLI in the folder
+the document lives in and lets Claude's own tools do the reading. That is the
+whole feature request — "access all the other things in the working directory"
+— and it costs no context plumbing at all. An untitled document has no folder
+of its own, so it borrows the one the sidebar is showing.
+
+The turn is given the document's path, the caret line and the selection, and is
+told that `omawrite --read`, `--tabs` and `--open` reach the running window.
+The reading calls landed yesterday for scripts and outside agents; the panel is
+their first caller, and the reason a question about "this paragraph" can be
+answered while the paragraph is still unsaved.
+
+An agent that edits the document is the part that could go wrong: the editor
+holds a buffer, autosave writes it, and a file changing underneath raises the
+external-change prompt. The rule `reportExternalChange` already follows answers
+it — a document holding no local changes takes the newer text silently — so the
+panel saves the buffer before it starts a turn. An edit Claude makes then lands
+in the editor without a dialog, and the prompt comes back only when the writer
+typed during the turn, which is a real conflict and worth being asked about.
+
+Permissions are `acceptEdits`. A headless child has nobody to ask, so the mode
+answers for the writer, and one that prompts hangs the turn instead of
+protecting it. Claude edits files without asking and refuses anything that
+would otherwise need a prompt, shell commands included.
+
+`dontAsk` was the first choice, copied from Omamail, and it was wrong here. The
+name reads as the permissive one; it blocks Write and Bash both, which is
+exactly right for a mail window that never edits anything and leaves a writing
+panel able to read and talk and nothing else. It took a screenshot of the panel
+answering "Can't write — Edit denied in this session. Here is the patch; paste
+it in" to see it, and three runs — sandbox off, environment scrubbed, mode
+changed — to establish that neither the sandbox nor the inherited session was
+the cause. The mode is read from `agent/permissionMode`, so `bypassPermissions`
+is there for anyone who wants the shell as well.
+
+`acceptEdits` refuses every shell command, which made the brief's offer of
+`omawrite --read` a promise the turn could not keep, so `agent/allowedTools`
+carries an allow-list through to `--allowedTools` and ships defaulting to
+`Bash(omawrite:*)` — the editor's own command line and nothing else. A machine
+that wants its own tools names them; this one allows its skill CLIs and
+read-only git.
+
+The turn is told which permissions it has, because one that believes it can
+run anything answers "here is a patch, paste it in" when it could have made
+the edit, and reports a command it was never allowed to run as one that
+failed.
+
+Phase 1 is the panel, the stream and the folder. Insert-at-cursor and
+replace-selection from a finished answer come next, and a D-Bus write call after
+that, so an agent edit can arrive as one undoable buffer mutation rather than a
+file change the watcher has to notice.
+
 ## 2026-09-18 — The reading calls answer from the window, not the session file
 
 `--list-tabs` reads `session.json`, which is what autosave last wrote. That is

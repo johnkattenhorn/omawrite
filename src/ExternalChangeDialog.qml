@@ -15,6 +15,7 @@ Dialog {
     property color textColor: darkMode ? "#d0d0d0" : "#42464c"
     property color strongTextColor: darkMode ? "#eeeeee" : "#222324"
     property color activeButtonColor: "#428bca"
+    property string fontFamily: "iA Writer Mono S"
     property int containerWidth: 520
     property int containerHeight: 320
     property real textScale: 1
@@ -57,7 +58,7 @@ Dialog {
                 ? "File removed"
                 : (root.appeared ? "File appeared" : "File changed")
             color: root.strongTextColor
-            font.family: "iA Writer Mono S"
+            font.family: root.fontFamily
             font.pixelSize: Math.round(16 * root.textScale)
             font.bold: true
         }
@@ -74,7 +75,7 @@ Dialog {
                       : "This file changed outside Omawrite."))
             color: root.textColor
             wrapMode: Text.Wrap
-            font.family: "iA Writer Mono S"
+            font.family: root.fontFamily
             font.pixelSize: Math.round(13 * root.textScale)
         }
     }
@@ -90,6 +91,7 @@ Dialog {
             spacing: 8
 
             SquareDialogButton {
+                fontFamily: root.fontFamily
                 id: keepButton
                 objectName: "keepMineButton"
                 text: "Keep Mine"
@@ -110,6 +112,7 @@ Dialog {
             }
 
             SquareDialogButton {
+                fontFamily: root.fontFamily
                 id: reloadButton
                 objectName: "reloadButton"
                 text: "Reload"
