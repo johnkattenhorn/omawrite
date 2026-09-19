@@ -4506,6 +4506,40 @@ private slots:
         QVERIFY2(!shown.contains(QStringLiteral("git")), "the command itself is not the panel's");
     }
 
+    void tellsTheTurnWhatItMayDo() {
+        // A turn that thinks it can run anything offers a patch to paste
+        // instead of making the edit, or reports a command as failing when
+        // it was never allowed to run.
+        const QString limited = AgentSession::permissionBrief(QStringLiteral("acceptEdits"),
+                                                              QStringLiteral("Bash(omawrite:*)"));
+        QVERIFY(limited.contains(QStringLiteral("without asking")));
+        QVERIFY(limited.contains(QStringLiteral("Bash(omawrite:*)")));
+        QVERIFY(limited.contains(QStringLiteral("refused")));
+
+        const QString none = AgentSession::permissionBrief(QStringLiteral("acceptEdits"),
+                                                           QString());
+        QVERIFY(none.contains(QStringLiteral("No shell commands")));
+
+        const QString everything = AgentSession::permissionBrief(
+            QStringLiteral("bypassPermissions"), QStringLiteral("Bash(omawrite:*)"));
+        QVERIFY(everything.contains(QStringLiteral("every tool allowed")));
+        QVERIFY2(!everything.contains(QStringLiteral("refused")),
+                 "a turn that can do anything should not be told what it cannot do");
+
+        // The allow-list is a setting, and an empty one means none rather
+        // than the default: somebody who cleared it meant it.
+        QSettings().setValue(QStringLiteral("agent/allowedTools"), QString());
+        QCOMPARE(AgentSession::allowedTools(), QString());
+        QSettings().setValue(QStringLiteral("agent/allowedTools"),
+                             QStringLiteral("Bash(git status:*)"));
+        QCOMPARE(AgentSession::allowedTools(), QStringLiteral("Bash(git status:*)"));
+        QVERIFY(AgentSession::arguments(QString(), QStringLiteral("acceptEdits"),
+                                        AgentSession::allowedTools())
+                    .contains(QStringLiteral("Bash(git status:*)")));
+        QSettings().remove(QStringLiteral("agent/allowedTools"));
+        QCOMPARE(AgentSession::allowedTools(), QStringLiteral("Bash(omawrite:*)"));
+    }
+
     void asksWithoutATerminalAndWithoutAnArgumentList() {
         FakeClaude claude;
         QVERIFY(claude.ok);
@@ -4535,6 +4569,11 @@ private slots:
         // dontAsk refuses as well -- it blocks both.
         QVERIFY(arguments.contains(QStringLiteral("--permission-mode")));
         QVERIFY(arguments.contains(QStringLiteral("acceptEdits")));
+        // acceptEdits refuses every shell command, so the editor's own
+        // command line is named explicitly or the brief's offer of the live
+        // buffer is a promise the turn cannot keep.
+        QVERIFY(arguments.contains(QStringLiteral("--allowedTools")));
+        QVERIFY(arguments.contains(QStringLiteral("Bash(omawrite:*)")));
         // A first turn has no session to resume.
         QVERIFY(!arguments.contains(QStringLiteral("--resume")));
 

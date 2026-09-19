@@ -30,6 +30,7 @@ constexpr int storeVersion = 1;
 const auto storeFileName = QStringLiteral("agent.json");
 
 const auto permissionModeSetting = QStringLiteral("agent/permissionMode");
+const auto allowedToolsSetting = QStringLiteral("agent/allowedTools");
 
 QString basename(const QVariantMap &input) {
     const QString path = input.value(QStringLiteral("file_path")).toString();
@@ -64,7 +65,39 @@ QString AgentSession::permissionMode() {
     return mode.isEmpty() ? QStringLiteral("acceptEdits") : mode;
 }
 
-QStringList AgentSession::arguments(const QString &resumeId, const QString &permissionMode) {
+QString AgentSession::allowedTools() {
+    const QSettings settings;
+    if (!settings.contains(allowedToolsSetting))
+        return QStringLiteral("Bash(omawrite:*)");
+    return settings.value(allowedToolsSetting).toString().trimmed();
+}
+
+QString AgentSession::permissionBrief(const QString &permissionMode,
+                                      const QString &allowedTools) {
+    if (permissionMode == QLatin1String("bypassPermissions")) {
+        return QStringLiteral(
+            "You are running with every tool allowed and nothing to approve it: do the work "
+            "rather than describing it.\n");
+    }
+    QString brief = QStringLiteral(
+        "You are running headless, so nobody can answer a permission prompt and anything that "
+        "would raise one is refused rather than queued. ");
+    if (permissionMode == QLatin1String("acceptEdits")) {
+        brief += QStringLiteral("Edits and writes to files go through without asking, so make "
+                                "them rather than offering a patch to paste. ");
+    }
+    if (allowedTools.isEmpty()) {
+        brief += QStringLiteral("No shell commands are available at all.\n");
+    } else {
+        brief += QStringLiteral("The only shell commands available are %1; anything else, "
+                                "including git and the network, is refused. Say what you could "
+                                "not run rather than assuming it failed.\n").arg(allowedTools);
+    }
+    return brief;
+}
+
+QStringList AgentSession::arguments(const QString &resumeId, const QString &permissionMode,
+                                    const QString &allowedTools) {
     QStringList arguments{
         QStringLiteral("-p"),
         QStringLiteral("--verbose"),
@@ -76,6 +109,8 @@ QStringList AgentSession::arguments(const QString &resumeId, const QString &perm
     // A fork rather than a plain resume: the panel can be asked to carry on
     // from a turn the writer has since branched away from, and two chats
     // sharing one session id would answer each other's questions.
+    if (!allowedTools.isEmpty())
+        arguments << QStringLiteral("--allowedTools") << allowedTools;
     if (!resumeId.isEmpty())
         arguments << QStringLiteral("--resume") << resumeId << QStringLiteral("--fork-session");
     return arguments;
@@ -118,6 +153,7 @@ QString AgentSession::preamble(const QString &documentPath, int line, const QStr
     }
     // Each command stays on one line: a name broken across a newline is one
     // the reader has to reassemble before it can be typed.
+    text += QStringLiteral("\n") + permissionBrief(permissionMode(), allowedTools());
     text += QStringLiteral(
         "\nYou are running in %1 and everything in it is yours to read.\n"
         "The editor is running too, and answers its own command line:\n"
@@ -275,7 +311,7 @@ void AgentSession::ask(const QString &question, const QUrl &documentUrl, int lin
 
     m_process = process;
     emit runningChanged();
-    process->start(program(), arguments(m_sessionId, permissionMode()));
+    process->start(program(), arguments(m_sessionId, permissionMode(), allowedTools()));
 }
 
 void AgentSession::interrupt() {

@@ -116,9 +116,24 @@ and Bash both, leaving a panel that can read and talk but not edit. It is the
 right mode for Omamail, which never edits anything; it was the wrong one here,
 and reading the file is all the panel could do until this was corrected.
 
-The mode is read from the `agent/permissionMode` setting, so it can be changed
-without a rebuild. `bypassPermissions` allows the shell too, with everything
-that implies.
+Two settings decide what a turn can do, both read at spawn:
+
+```ini
+[agent]
+permissionMode=acceptEdits          ; or bypassPermissions
+allowedTools=Bash(omawrite:*)       ; --allowedTools, empty for none
+```
+
+`allowedTools` names what may run without anyone to approve it. The default is
+the editor's own command line, which is what makes the brief's offer of
+`omawrite --read` true rather than a promise the turn cannot keep. Widen it the
+way Claude Code takes it — `Bash(git status:*) Bash(git diff:*)` — or set
+`permissionMode=bypassPermissions` for a panel that can run anything, including
+the network, with nothing asking first.
+
+The turn is told which of these it has. Without that it offers a patch to paste
+when it could have made the edit, or reports a command as failing when it was
+never allowed to run.
 
 `OMAWRITE_CLAUDE` names the command to run instead of `claude`, which is how
 the tests drive a synthetic stream.

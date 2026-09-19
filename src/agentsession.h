@@ -43,13 +43,22 @@ public:
     // Non-interactive and streaming. The permission mode has to answer for
     // the writer, because a child with no terminal has nobody to ask:
     // acceptEdits takes the edits and refuses everything else.
-    static QStringList arguments(const QString &resumeId, const QString &permissionMode);
+    static QStringList arguments(const QString &resumeId, const QString &permissionMode,
+                                 const QString &allowedTools);
     static QString permissionMode();
+    // Tools the turn may use without anyone to ask, as `--allowedTools` takes
+    // them. acceptEdits applies edits and refuses everything else, so the
+    // editor's own command line has to be named here for the brief's offer of
+    // the live buffer to be true.
+    static QString allowedTools();
     // What the first turn of a chat is told: which document is in front of the
     // writer, where the caret is, what is selected, and that the running window
     // answers `omawrite --read` with text no file has yet.
     static QString preamble(const QString &documentPath, int line, const QString &selection,
                             const QString &folderPath);
+    // What this turn may actually do, in a sentence, so the answer does not
+    // offer a patch it could have applied or promise a command it cannot run.
+    static QString permissionBrief(const QString &permissionMode, const QString &allowedTools);
     // A turn whose document is not the one the chat started on says so, rather
     // than letting the agent assume the page never moved.
     static QString contextNotice(const QString &documentPath);
