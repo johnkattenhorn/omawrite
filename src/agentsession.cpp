@@ -1,10 +1,14 @@
 #include "agentsession.h"
 
+#include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <limits>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSaveFile>
 #include <QSettings>
 #include <QStandardPaths>
 
@@ -19,6 +23,11 @@ namespace {
 constexpr int answerLimit = 64 * 1024;
 constexpr int historyLimit = 64;
 constexpr int promptLimit = 1024 * 1024;
+// What the kept conversations are allowed to cost on disk. A transcript is
+// cheap; forty of them growing without an end is not.
+constexpr int keptChatLimit = 40;
+constexpr int storeVersion = 1;
+const auto storeFileName = QStringLiteral("agent.json");
 
 const auto permissionModeSetting = QStringLiteral("agent/permissionMode");
 
@@ -28,7 +37,11 @@ QString basename(const QVariantMap &input) {
 }
 }
 
-AgentSession::AgentSession(QObject *parent) : QObject(parent) {}
+AgentSession::AgentSession(QObject *parent)
+    : AgentSession(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation), parent) {}
+
+AgentSession::AgentSession(const QString &stateDirectory, QObject *parent)
+    : QObject(parent), m_stateDirectory(stateDirectory) {}
 
 AgentSession::~AgentSession() {
     interrupt();
@@ -155,6 +168,15 @@ void AgentSession::ask(const QString &question, const QUrl &documentUrl, int lin
     if (asked.isEmpty() || running())
         return;
 
+    // A question asked on a document the panel was not showing files the
+    // conversation under that document from here on.
+    if (documentPath != m_documentPath && !m_swapDeferred) {
+        saveChat();
+        m_documentPath = documentPath;
+        if (!documentPath.isEmpty())
+            loadChat(documentPath);
+    }
+
     if (!available()) {
         appendMessage(QStringLiteral("you"), asked);
         appendMessage(QStringLiteral("trouble"),
@@ -191,6 +213,7 @@ void AgentSession::ask(const QString &question, const QUrl &documentUrl, int lin
     }
 
     m_pending.clear();
+    m_resumedTurn = !m_sessionId.isEmpty();
     m_cancelled = false;
     m_resultSeen = false;
     m_streamedText = false;
@@ -268,6 +291,7 @@ void AgentSession::newChat() {
     m_contextPath.clear();
     m_messages.clear();
     m_answerIndex = -1;
+    saveChat();
     emit messagesChanged();
 }
 
@@ -394,6 +418,126 @@ void AgentSession::appendToAnswer(const QString &text) {
     emit messagesChanged();
 }
 
+QString AgentSession::storePath() const {
+    return QDir(m_stateDirectory).filePath(storeFileName);
+}
+
+QJsonObject AgentSession::readStore() const {
+    QFile file(storePath());
+    if (!file.open(QIODevice::ReadOnly))
+        return QJsonObject();
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    if (!document.isObject()
+            || document.object().value(QStringLiteral("version")).toInt() != storeVersion)
+        return QJsonObject();
+    return document.object().value(QStringLiteral("chats")).toObject();
+}
+
+void AgentSession::loadChat(const QString &documentPath) {
+    m_messages.clear();
+    m_sessionId.clear();
+    m_contextPath.clear();
+    m_answerIndex = -1;
+
+    const QJsonObject chat = readStore().value(documentPath).toObject();
+    m_sessionId = chat.value(QStringLiteral("sessionId")).toString();
+    m_contextPath = documentPath;
+    for (const QJsonValue &value : chat.value(QStringLiteral("messages")).toArray()) {
+        const QJsonObject message = value.toObject();
+        const QString role = message.value(QStringLiteral("role")).toString();
+        if (role != QLatin1String("you") && role != QLatin1String("claude")
+                && role != QLatin1String("trouble"))
+            continue;
+        QVariantMap kept;
+        kept[QStringLiteral("role")] = role;
+        kept[QStringLiteral("text")] = message.value(QStringLiteral("text")).toString();
+        m_messages.append(kept);
+    }
+    while (m_messages.size() > historyLimit)
+        m_messages.removeFirst();
+    emit messagesChanged();
+}
+
+// Read, replace this document's entry, write. Two windows can hold the file
+// at once, and a blind overwrite would take the other one's chat with it.
+void AgentSession::saveChat() {
+    if (m_stateDirectory.isEmpty() || m_documentPath.isEmpty())
+        return;
+
+    QJsonObject chats = readStore();
+    if (m_messages.isEmpty() && m_sessionId.isEmpty()) {
+        chats.remove(m_documentPath);
+    } else {
+        QJsonArray messages;
+        for (const QVariant &value : m_messages) {
+            const QVariantMap message = value.toMap();
+            messages.append(QJsonObject{
+                {QStringLiteral("role"), message.value(QStringLiteral("role")).toString()},
+                {QStringLiteral("text"), message.value(QStringLiteral("text")).toString()}});
+        }
+        chats[m_documentPath] = QJsonObject{
+            {QStringLiteral("sessionId"), m_sessionId},
+            {QStringLiteral("updated"), QDateTime::currentSecsSinceEpoch()},
+            {QStringLiteral("messages"), messages}};
+    }
+
+    // The oldest conversations go first when there are too many of them.
+    while (chats.size() > keptChatLimit) {
+        QString oldestKey;
+        qint64 oldest = std::numeric_limits<qint64>::max();
+        for (auto it = chats.constBegin(); it != chats.constEnd(); ++it) {
+            const qint64 updated = qint64(it.value().toObject()
+                                          .value(QStringLiteral("updated")).toDouble());
+            if (updated < oldest) {
+                oldest = updated;
+                oldestKey = it.key();
+            }
+        }
+        if (oldestKey.isEmpty() || oldestKey == m_documentPath)
+            break;
+        chats.remove(oldestKey);
+    }
+
+    QDir().mkpath(m_stateDirectory);
+    QSaveFile file(storePath());
+    if (!file.open(QIODevice::WriteOnly))
+        return;
+    const QJsonObject store{{QStringLiteral("version"), storeVersion},
+                            {QStringLiteral("chats"), chats}};
+    if (file.write(QJsonDocument(store).toJson(QJsonDocument::Compact)) < 0)
+        return;
+    file.commit();
+    // Questions and answers about the writer's own documents: nobody else's
+    // to read.
+    QFile::setPermissions(storePath(), QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+}
+
+void AgentSession::showDocument(const QUrl &documentUrl) {
+    const QString path = documentUrl.isLocalFile() ? documentUrl.toLocalFile() : QString();
+    if (path == m_documentPath && (!m_messages.isEmpty() || !path.isEmpty()))
+        return;
+
+    // A turn belongs to the chat that asked for it, so a tab change during
+    // one waits for its answer rather than filing it under the new document.
+    if (running()) {
+        m_deferredDocument = path;
+        m_swapDeferred = true;
+        return;
+    }
+
+    saveChat();
+    m_documentPath = path;
+    if (path.isEmpty()) {
+        m_messages.clear();
+        m_sessionId.clear();
+        m_contextPath.clear();
+        m_answerIndex = -1;
+        emit messagesChanged();
+        return;
+    }
+    loadChat(path);
+}
+
 void AgentSession::appendMessage(const QString &role, const QString &text) {
     QVariantMap message;
     message[QStringLiteral("role")] = role;
@@ -440,13 +584,30 @@ void AgentSession::finishTurn(const QString &failure) {
     }
     m_answerIndex = -1;
 
-    if (!failure.isEmpty())
-        appendMessage(QStringLiteral("trouble"), failure);
+    QString said = failure;
+    if (!said.isEmpty() && m_resumedTurn) {
+        // The conversation it was told to carry on is not there any more --
+        // a cleared CLI history, another machine, a session too old. Drop it
+        // rather than failing the same way every time from here on.
+        m_sessionId.clear();
+        said = QStringLiteral("That conversation could not be picked up again. Ask once more "
+                              "and Claude starts a fresh one.");
+    }
+    if (!said.isEmpty())
+        appendMessage(QStringLiteral("trouble"), said);
     else if (empty && m_cancelled)
         appendMessage(QStringLiteral("trouble"), QStringLiteral("Stopped."));
 
+    saveChat();
     emit runningChanged();
     emit answered();
+
+    if (m_swapDeferred) {
+        m_swapDeferred = false;
+        const QString next = m_deferredDocument;
+        m_deferredDocument.clear();
+        showDocument(next.isEmpty() ? QUrl() : QUrl::fromLocalFile(next));
+    }
 }
 
 void AgentSession::setActivity(const QString &activity) {

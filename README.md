@@ -153,8 +153,10 @@ without naming a path. Answers stream in as they are written. A line above the
 input says what the turn is doing and for how long, and `Escape` or `stop`
 ends it.
 
-It drives the `claude` command line non-interactively, which means it can write
-anything you can write without asking first. [docs/AGENT.md](docs/AGENT.md)
+Each document keeps its own conversation, across tab switches and across
+restarts, until you clear it with **new**. It drives the `claude` command line
+non-interactively, which means it can write anything you can write without
+asking first. [docs/AGENT.md](docs/AGENT.md)
 covers what it is told, what it runs, how an edit it makes reaches the editor,
 and what has not been built yet.
 

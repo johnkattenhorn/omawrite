@@ -10,6 +10,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+class QJsonObject;
+
 // Claude beside the document, in the panel rather than in the next tile.
 //
 // One turn is one `claude -p --output-format stream-json` child, started in the
@@ -27,6 +29,9 @@ class AgentSession : public QObject {
 
 public:
     explicit AgentSession(QObject *parent = nullptr);
+    // The directory the conversations are kept in. The tests give it a
+    // scratch one; the app gives it the same place the tabs are kept.
+    AgentSession(const QString &stateDirectory, QObject *parent = nullptr);
     ~AgentSession() override;
 
     // The CLI this panel drives. `OMAWRITE_CLAUDE` names another program, which
@@ -65,8 +70,14 @@ public:
                          const QString &selection, const QUrl &folderUrl);
     // Stop the turn and everything it started. The answer so far is kept.
     Q_INVOKABLE void interrupt();
-    // Forget the conversation, keep the panel open.
+    // Forget the conversation, keep the panel open. The kept copy goes with
+    // it: clearing is the one thing that means "do not bring this back".
     Q_INVOKABLE void newChat();
+    // Show the conversation belonging to this document, keeping the one on
+    // screen. A chat is about a document, so it follows the tab rather than
+    // the window, and it outlives the window: closing Omawrite in the middle
+    // of working something out should not be how you lose it.
+    Q_INVOKABLE void showDocument(const QUrl &documentUrl);
 
     // One line of the CLI's output. Public so the parser can be tested without
     // a process behind it.
@@ -81,11 +92,23 @@ signals:
 
 private:
     void appendMessage(const QString &role, const QString &text);
+    void loadChat(const QString &documentPath);
+    void saveChat();
+    QString storePath() const;
+    QJsonObject readStore() const;
     void appendToAnswer(const QString &text);
     void finishTurn(const QString &failure);
     void setActivity(const QString &activity);
     void readAvailableOutput();
 
+    QString m_stateDirectory;
+    // The document this conversation belongs to, empty for one that has never
+    // been saved: a chat with nowhere to hang stays in memory.
+    QString m_documentPath;
+    // A document the writer moved to while a turn was running. The answer
+    // belongs to the chat that asked for it, so the swap waits.
+    QString m_deferredDocument;
+    bool m_swapDeferred = false;
     QPointer<QProcess> m_process;
     qint64 m_processGroup = 0;
     QByteArray m_pending;
@@ -105,4 +128,7 @@ private:
     // messages the whole answer arrives once, in the assistant message, and
     // taking both would print it twice.
     bool m_streamedText = false;
+    // Whether this turn carried a session id. A kept conversation can be gone
+    // by the time it is asked for again, and that failure has its own answer.
+    bool m_resumedTurn = false;
 };

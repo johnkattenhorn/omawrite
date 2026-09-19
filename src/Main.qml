@@ -2175,7 +2175,15 @@ ApplicationWindow {
         }
     }
 
+    // A conversation belongs to a document, so it follows the tab: switching
+    // shows that document's chat, and the one being left is kept.
+    Connections {
+        target: backend
+        function onFileUrlChanged() { agent.showDocument(backend.fileUrl); }
+    }
+
     Component.onCompleted: {
+        agent.showDocument(backend.fileUrl);
         sidebarLogicalWidth = backend.sidebarWidth();
         agentLogicalWidth = backend.agentPanelWidth();
         var geometry = backend.windowGeometry();

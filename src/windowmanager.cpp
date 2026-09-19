@@ -94,7 +94,9 @@ Backend *WindowManager::createWindow(const QString &windowId) {
     context->setContextProperty(QStringLiteral("backend"), backend);
     // One conversation per window, owned by that window's Backend so it goes
     // when the window does, taking any turn still running with it.
-    context->setContextProperty(QStringLiteral("agent"), new AgentSession(backend));
+    context->setContextProperty(
+        QStringLiteral("agent"),
+        new AgentSession(m_workspaceSession->stateDirectory(), backend));
     QQmlComponent component(m_engine, m_qmlUrl, backend);
     QObject *window = component.create(context);
     if (!window) {

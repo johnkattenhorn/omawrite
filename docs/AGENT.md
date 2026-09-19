@@ -64,8 +64,29 @@ remote image or a link.
 the turn was running goes with it. What had already arrived stays on screen.
 
 A turn's answer is held to 64 KiB and the panel to its last 64 messages; a
-question, with its brief, to 1 MiB. Nothing is written to disk: close the
-window and the conversation goes with it.
+question, with its brief, to 1 MiB.
+
+## What is kept
+
+A conversation belongs to a document, not to a window. Switching tabs shows
+that document's chat; switching back brings the first one's back. Closing
+Omawrite keeps them: the panel is where you work something out, and losing it
+to a restart is how you find out you were relying on it.
+
+They live in `agent.json` beside the session file, under
+`$XDG_DATA_HOME/omawrite`, written 0600 — your questions and Claude's answers
+about your own documents. The forty most recently used documents are kept, 64
+messages each; the oldest goes when a forty-first arrives. A document that has
+never been saved has nowhere to file a chat under, so its conversation stays
+in memory.
+
+The stored chat carries the Claude session id, so a turn after a restart
+carries on the same conversation rather than only looking like it does. When
+that session has gone — cleared, expired, or left on another machine — the
+panel says so, drops it, and the next question starts a fresh one.
+
+**new** clears the conversation on screen and the kept copy with it. That is
+the one thing that means "do not bring this back".
 
 ## Edits
 

@@ -4606,6 +4606,151 @@ private slots:
         session.interrupt();
     }
 
+    void bringsTheConversationBackWithTheDocument() {
+        FakeClaude claude;
+        QVERIFY(claude.ok);
+        claude.setStream({
+            R"({"type":"system","subtype":"init","session_id":"S1"})",
+            R"({"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Eighty columns, then."}}})",
+            R"({"type":"result","subtype":"success","is_error":false,"session_id":"S1","result":"Eighty columns, then."})",
+        });
+
+        QTemporaryDir state;
+        QVERIFY(state.isValid());
+        QTemporaryDir documents;
+        QVERIFY(documents.isValid());
+        const QString note = documents.filePath(QStringLiteral("status.md"));
+        QVERIFY(writeFile(note, QByteArrayLiteral("# Status\n")));
+        const QUrl noteUrl = QUrl::fromLocalFile(note);
+
+        {
+            AgentSession session(state.path());
+            session.showDocument(noteUrl);
+            session.ask(QStringLiteral("should we wrap at 80"), noteUrl, 1, QString(), QUrl());
+            QTRY_VERIFY(!session.running());
+            QCOMPARE(session.messages().size(), 2);
+        }
+
+        // A new window, a new process, the same document: the conversation is
+        // where it was left, and the next turn carries on the same session
+        // rather than introducing itself again.
+        AgentSession restored(state.path());
+        restored.showDocument(noteUrl);
+        QCOMPARE(restored.messages().size(), 2);
+        QCOMPARE(restored.messages().at(1).toMap().value(QStringLiteral("text")).toString(),
+                 QStringLiteral("Eighty columns, then."));
+
+        restored.ask(QStringLiteral("and the tables?"), noteUrl, 1, QString(), QUrl());
+        QTRY_VERIFY(!restored.running());
+        const QStringList arguments = claude.recorded(QStringLiteral("args"))
+            .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        QVERIFY(arguments.contains(QStringLiteral("--resume")));
+        QVERIFY(arguments.contains(QStringLiteral("S1")));
+    }
+
+    void keepsOneConversationPerDocument() {
+        FakeClaude claude;
+        QVERIFY(claude.ok);
+        claude.setStream({
+            R"({"type":"result","subtype":"success","is_error":false,"session_id":"S1","result":"noted"})",
+        });
+
+        QTemporaryDir state;
+        QVERIFY(state.isValid());
+        QTemporaryDir documents;
+        QVERIFY(documents.isValid());
+        const QUrl first = QUrl::fromLocalFile(documents.filePath(QStringLiteral("one.md")));
+        const QUrl second = QUrl::fromLocalFile(documents.filePath(QStringLiteral("two.md")));
+
+        AgentSession session(state.path());
+        session.showDocument(first);
+        session.ask(QStringLiteral("about the first"), first, 0, QString(), QUrl());
+        QTRY_VERIFY(!session.running());
+        QCOMPARE(session.messages().size(), 2);
+
+        // Moving to another tab shows that document's chat, which is empty.
+        session.showDocument(second);
+        QVERIFY(session.messages().isEmpty());
+
+        // And moving back brings the first one's conversation with it.
+        session.showDocument(first);
+        QCOMPARE(session.messages().size(), 2);
+        QCOMPARE(session.messages().at(0).toMap().value(QStringLiteral("text")).toString(),
+                 QStringLiteral("about the first"));
+
+        // Clearing is the one thing that means "do not bring this back".
+        session.newChat();
+        QVERIFY(session.messages().isEmpty());
+        AgentSession reopened(state.path());
+        reopened.showDocument(first);
+        QVERIFY(reopened.messages().isEmpty());
+    }
+
+    void startsOverWhenAKeptConversationHasGone() {
+        FakeClaude claude;
+        QVERIFY(claude.ok);
+        // The CLI refuses the session it is told to resume, as it does once
+        // that conversation has been cleared or was left on another machine.
+        claude.setBody(QStringLiteral("case \"$*\" in *--resume*) exit 1;; esac\n"
+                                      "cat \"$dir/stream\" 2>/dev/null\n"));
+        claude.setStream({
+            R"({"type":"result","subtype":"success","is_error":false,"session_id":"S1","result":"fine"})",
+        });
+
+        QTemporaryDir state;
+        QVERIFY(state.isValid());
+        QTemporaryDir documents;
+        QVERIFY(documents.isValid());
+        const QUrl note = QUrl::fromLocalFile(documents.filePath(QStringLiteral("note.md")));
+
+        AgentSession session(state.path());
+        session.showDocument(note);
+        session.ask(QStringLiteral("first"), note, 0, QString(), QUrl());
+        QTRY_VERIFY(!session.running());
+
+        session.ask(QStringLiteral("second"), note, 0, QString(), QUrl());
+        QTRY_VERIFY(!session.running());
+        const QVariantList messages = session.messages();
+        QCOMPARE(messages.last().toMap().value(QStringLiteral("role")).toString(),
+                 QStringLiteral("trouble"));
+        QVERIFY(messages.last().toMap().value(QStringLiteral("text")).toString()
+                    .contains(QStringLiteral("could not be picked up")));
+
+        // The dead session is dropped rather than failing the same way for
+        // ever: the next turn introduces itself instead of resuming.
+        session.ask(QStringLiteral("third"), note, 0, QString(), QUrl());
+        QTRY_VERIFY(!session.running());
+        QVERIFY(!claude.recorded(QStringLiteral("args")).contains(QStringLiteral("--resume")));
+        QCOMPARE(session.messages().last().toMap().value(QStringLiteral("role")).toString(),
+                 QStringLiteral("claude"));
+    }
+
+    void waitsForTheAnswerBeforeChangingDocument() {
+        FakeClaude claude;
+        QVERIFY(claude.ok);
+        claude.setBody(QStringLiteral("sleep 5\n"));
+
+        QTemporaryDir state;
+        QVERIFY(state.isValid());
+        QTemporaryDir documents;
+        QVERIFY(documents.isValid());
+        const QUrl first = QUrl::fromLocalFile(documents.filePath(QStringLiteral("one.md")));
+        const QUrl second = QUrl::fromLocalFile(documents.filePath(QStringLiteral("two.md")));
+
+        AgentSession session(state.path());
+        session.showDocument(first);
+        session.ask(QStringLiteral("about the first"), first, 0, QString(), QUrl());
+        QVERIFY(session.running());
+
+        // The answer belongs to the document that asked for it, so the swap
+        // waits rather than filing it under whatever tab is in front now.
+        session.showDocument(second);
+        QVERIFY(session.running());
+        QCOMPARE(session.messages().size(), 2);
+        session.interrupt();
+        QTRY_VERIFY(session.messages().isEmpty());
+    }
+
     void opensThePanelWithoutSqueezingTheWriting() {
         const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
         QVERIFY(!mainQmlPath.isEmpty());

@@ -68,8 +68,10 @@ Written here:
   It is told the path, the caret line and the selection, and that the running
   window answers `--read`. The buffer is saved before a turn, so an edit the
   agent makes reloads without the external-change prompt.
-  [`docs/AGENT.md`](AGENT.md) has the rest, including the permission mode and
-  what it costs.
+  Conversations are filed under the document they are about and kept across
+  restarts, session id included, so a turn after a restart carries on rather
+  than starting over. [`docs/AGENT.md`](AGENT.md) has the rest, including the
+  permission mode and what it costs.
 - **Omamail's chrome** — the AI control sits at the footer's right edge as
   Omamail's sits at its header's, the icons are Nerd Font glyphs from the
   Material Design Icons range the Omarchy shell draws from, and they are drawn

@@ -2,6 +2,39 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-19 — A conversation belongs to a document, and outlives the window
+
+The panel started as one chat per window, held in memory. Two sittings with it
+showed what that costs: a rebuild and a restart during testing took a
+conversation with it, and what was lost was not the transcript but the thread
+of an argument being worked out — in that case whether Omawrite should help
+hold Markdown to 80 columns.
+
+So a chat is filed under the document it is about. Switching tabs switches the
+conversation; switching back brings it back; closing Omawrite keeps them. The
+store is `agent.json` in the same state directory as the tabs, 0600, the forty
+most recently used documents, 64 messages each, oldest dropped first. It is
+read-modify-written rather than overwritten, because two windows can hold it at
+once and a blind write would take the other window's chat with it.
+
+What makes it worth doing rather than decorative is the session id. The
+transcript alone would be a picture of a conversation Claude no longer has;
+kept beside it, the next turn resumes the same session and the model still
+knows what was being argued. A session can be gone by then — cleared, expired,
+or left on another machine — so a resumed turn that fails says exactly that,
+drops the id, and lets the next question start cleanly, rather than failing the
+same way for ever.
+
+A turn already running when the writer changes tab keeps its chat: the answer
+belongs to the document that asked for it, so the swap waits for it. **new**
+clears the kept copy as well as the screen, because clearing is the one gesture
+that means "do not bring this back".
+
+The transcripts are on disk now, which the panel's first version deliberately
+avoided. They are the writer's own questions about their own documents, and
+Claude Code already keeps its full session transcripts under `~/.claude`; this
+adds a smaller copy next to the tabs rather than a new kind of record.
+
 ## 2026-09-19 — The measure fills the window, and the docks take from it
 
 The column was 65 characters, which is a good measure for a page and the wrong
