@@ -3414,9 +3414,16 @@ private slots:
 
         // Reading elsewhere, with the caret scrolled out of sight: resizing
         // the window has to leave the page where the reader put it.
-        const qreal readingAt = editor->property("y").toReal()
-            + editor->property("cursorRectangle").toRectF().y()
-            + viewport->property("height").toReal() + 200;
+        // Somewhere below the caret, and inside what the document can
+        // actually scroll: a Flickable clamps a contentY past its end, and a
+        // resize would then re-clamp it and look like the page moved.
+        const qreal furthest = viewport->property("contentHeight").toReal()
+            - viewport->property("height").toReal() - 100;
+        QVERIFY2(furthest > 0, "the document is too short to scroll");
+        const qreal readingAt = qMin(editor->property("y").toReal()
+                                         + editor->property("cursorRectangle").toRectF().y()
+                                         + viewport->property("height").toReal() + 200,
+                                     furthest);
         viewport->setProperty("contentY", readingAt);
         QCOMPARE(viewport->property("contentY").toReal(), readingAt);
         const qreal viewportBefore = viewport->property("height").toReal();
