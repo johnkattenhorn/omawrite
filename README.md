@@ -4,16 +4,20 @@ A dead-simple Markdown writing app built with Qt Quick and C++ that automaticall
 
 > **This is a fork.** [omacom/omawrite](https://github.com/omacom/omawrite) is
 > deliberately minimal and stays that way on purpose. This branch takes 21 of
-> its open pull requests and adds two things nobody had built, so it has tabs, a
-> file sidebar, a preview that renders local images, wikilinks, checkboxes,
-> focus mode, image paste, and a command line that reaches the running window
-> over D-Bus.
+> its open pull requests, so it has tabs, a file sidebar, a preview that
+> renders local images, wikilinks, checkboxes and focus mode.
 >
-> 105 commits, 112 tests. Merging those pull requests meant reconciling
-> contributors' designs rather than resolving conflict markers, and
+> The rest is written here, because nobody had built it: pasting an image,
+> copy on select, wrapping and unwrapping Markdown at 80 columns, a command
+> line that reaches the running window over D-Bus, and Claude in a panel beside
+> the document with a conversation per file that survives a restart.
+>
+> 137 tests. Merging those pull requests meant reconciling contributors'
+> designs rather than resolving conflict markers, and
 > [`docs/DECISIONS.md`](docs/DECISIONS.md) records the calls that are not
 > obvious from the diff. [`docs/STATUS.md`](docs/STATUS.md) says what was taken,
-> what was left, and why.
+> what was left, and why, and [`docs/AGENT.md`](docs/AGENT.md) covers the
+> panel.
 
 <img width="2948" height="3227" alt="screenshot-2026-06-23_15-24-08" src="https://github.com/user-attachments/assets/4e930c0d-edda-4046-b444-a59eff523329" />
 <img width="2948" height="3227" alt="screenshot-2026-06-23_15-23-23" src="https://github.com/user-attachments/assets/8ced7c26-961b-4ded-b263-84403001a951" />
@@ -88,12 +92,18 @@ window is closed while `--open` does not.
 - `Ctrl+Shift+P` toggles the Markdown preview.
 - `Alt+G` opens the Claude panel on the right of the window, and closes it
   again. See [Claude beside the document](docs/AGENT.md).
+- `Ctrl+T` opens a tab, `Ctrl+W` closes the one in front, and `Ctrl+Tab` and
+  `Ctrl+Shift+Tab` move between them. `Ctrl+Shift+PgUp` and `Ctrl+Shift+PgDown`
+  move a tab along the strip. Tabs come back where you left them when Omawrite
+  starts, and the strip only appears once there are two.
 - `Ctrl+N` opens a new Omawrite window.
 - `Ctrl+Z`, `Ctrl+Shift+Z`, and `Ctrl+Y` handle undo and redo.
 - `Super+F` toggles fullscreen. Qt maps this key as `Meta+F`.
 - `Ctrl+F` searches the document. Use `Enter` or `Ctrl+G` for the next match and `Shift+Enter` for the previous match.
 - `Ctrl+H` opens find and replace.
 - `Ctrl+B`, `Ctrl+I`, and `Ctrl+Shift+X` toggle bold, italic, and strikethrough Markdown. `Ctrl+K` inserts a link.
+- `Ctrl+L` turns a list item into a checkbox, and ticks or unticks one that
+  already is. Clicking the box does the same.
 - `Tab` and `Shift+Tab` nest and unnest list items. Bullets and numbers line up under
   the item above them, and ordered lists renumber themselves.
 - `Ctrl+Click` or `Ctrl+Enter` follows a link: Obsidian `[[wikilinks]]` open the note in Omawrite, `https://` and markdown `[text](url)` links open in the browser.
