@@ -4361,6 +4361,50 @@ private slots:
         QTRY_COMPARE(window->property("editorWidth").toInt(), full);
     }
 
+    void copiesAnAnswerTheSameWayTheDocumentDoes() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        auto *agent = new AgentSession(tabState.path(), &engine);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"), agent);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        auto *panel = window->findChild<QQuickItem *>(QStringLiteral("agentPanel"));
+        QVERIFY(panel);
+        // The panel follows the window's setting rather than one of its own.
+        QCOMPARE(panel->property("copyOnSelect").toBool(), true);
+        window->setProperty("agentOpen", true);
+
+        QObject *shortcut = nullptr;
+        for (QObject *candidate : window->findChildren<QObject *>()) {
+            if (candidate->objectName() == QLatin1String("copyOnSelectShortcut"))
+                shortcut = candidate;
+        }
+        QVERIFY(shortcut);
+        QMetaObject::invokeMethod(shortcut, "activated");
+        QTRY_COMPARE(panel->property("copyOnSelect").toBool(), false);
+        QMetaObject::invokeMethod(shortcut, "activated");
+        QTRY_COMPARE(panel->property("copyOnSelect").toBool(), true);
+
+        // A copy the panel makes says so in the footer, the way the
+        // document's does, so the two do not look like different features.
+        QGuiApplication::clipboard()->setText(QStringLiteral("something else"));
+        QMetaObject::invokeMethod(panel, "selectionCopied", Q_ARG(int, 12));
+        QTRY_COMPARE(window->property("notice").toString(),
+                     QStringLiteral("Copied 12 characters"));
+        QMetaObject::invokeMethod(panel, "selectionCopied", Q_ARG(int, 1));
+        QTRY_COMPARE(window->property("notice").toString(),
+                     QStringLiteral("Copied 1 character"));
+    }
+
     void keepsTheAgentButtonAtTheTopRight() {
         const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
         QVERIFY(!mainQmlPath.isEmpty());

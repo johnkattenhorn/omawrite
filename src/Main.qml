@@ -869,6 +869,7 @@ ApplicationWindow {
         activity: agent.activity
         documentName: backend.fileName
         fontFamily: win.appFont
+        copyOnSelect: editorSettings.copyOnSelect
         logicalWidth: win.agentLogicalWidth
         // Never let the panel squeeze the writing column below its minimum.
         maximumLogicalWidth: Math.max(minimumLogicalWidth,
@@ -876,6 +877,10 @@ ApplicationWindow {
                                       - 420 - Math.round(fileSidebar.width / win.textScale))
 
         onAsked: function(question) { win.askAgent(question); }
+        onSelectionCopied: function(characters) {
+            win.flashNotice(characters === 1 ? "Copied 1 character"
+                                             : "Copied " + characters + " characters");
+        }
         onInterrupted: agent.interrupt()
         onNewChatRequested: agent.newChat()
         onWidthChangeRequested: function(width) { win.agentLogicalWidth = width; }

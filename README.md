@@ -111,7 +111,8 @@ window is closed while `--open` does not.
   it goes before deciding to follow it.
 - Selecting with the mouse copies. Let go of the drag and what was highlighted
   is on the clipboard, the way a terminal does it, and the footer says how many
-  characters for a moment. `Ctrl+Shift+C` turns it off and on, and it stays as
+  characters for a moment. It works in the document, the preview and the Claude
+  panel. `Ctrl+Shift+C` turns it off and on everywhere at once, and it stays as
   you left it.
 - `Ctrl+J` wraps Markdown at 80 columns — the convention most Markdown files
   are held to. It reflows rather than folds: lines already broken somewhere

@@ -20,6 +20,9 @@ Item {
     property bool running: false
     property bool available: true
     property string activity: ""
+    // The window's own copy-on-select rule, so an answer behaves like the
+    // document does: let go of a drag and it is on the clipboard.
+    property bool copyOnSelect: true
     property string documentName: ""
     // The desktop's font, as Omamail's window uses: narrower than the writing
     // font, so an answer beside the document shows more of itself.
@@ -40,6 +43,8 @@ Item {
     property int maximumLogicalWidth: 720
 
     signal asked(string question)
+    // A selection the panel just copied, for the footer to say so.
+    signal selectionCopied(int characters)
     signal interrupted()
     signal newChatRequested()
     signal widthChangeRequested(int width)
@@ -54,6 +59,18 @@ Item {
 
     function focusInput() {
         input.forceActiveFocus();
+    }
+
+    // The same rule the editor follows, applied to whichever part of the
+    // panel the drag happened in.
+    function copySelectionOnRelease(source) {
+        if (!root.copyOnSelect)
+            return;
+        var selected = source.selectedText;
+        if (selected.length === 0)
+            return;
+        source.copy();
+        root.selectionCopied(selected.length);
     }
 
     function submit() {
@@ -235,6 +252,16 @@ Item {
                         selectedTextColor: root.textColor
                         font.family: root.fontFamily
                         font.pixelSize: root.bodySize
+
+                        // A passive grab, as the editor's is: the TextEdit
+                        // keeps running the selection underneath it and this
+                        // still sees the release.
+                        PointHandler {
+                            objectName: "agentSelectionCopier"
+                            enabled: root.copyOnSelect
+                            acceptedButtons: Qt.LeftButton
+                            onActiveChanged: if (!active) root.copySelectionOnRelease(turnText)
+                        }
                     }
                 }
             }
@@ -347,6 +374,13 @@ Item {
                 selectedTextColor: root.textColor
                 font.family: root.fontFamily
                 font.pixelSize: root.bodySize
+
+                PointHandler {
+                    objectName: "agentInputSelectionCopier"
+                    enabled: root.copyOnSelect
+                    acceptedButtons: Qt.LeftButton
+                    onActiveChanged: if (!active) root.copySelectionOnRelease(input)
+                }
 
                 // Enter sends and Shift+Enter is a newline, the way every other
                 // message box works. Escape stops a turn if one is running, and
