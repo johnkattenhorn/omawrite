@@ -1,6 +1,6 @@
 # Status
 
-Last updated 2026-09-17.
+Last updated 2026-09-19.
 
 A fork of [omacom/omawrite](https://github.com/omacom/omawrite), the Markdown
 writing app Omarchy 4.0 ships. Upstream keeps it deliberately minimal. This fork
@@ -10,13 +10,13 @@ drive.
 
 ## Where it is
 
-Branch `custom`, 110 commits ahead of `origin/master` (upstream `8f98892`).
-116 tests pass. Clean build, no warnings. Pushed to
+Branch `agent-panel`, 112 commits ahead of `origin/master` (upstream `8f98892`),
+off `custom`. 127 tests pass. Clean build, no warnings. Pushed to
 [johnkattenhorn/omawrite](https://github.com/johnkattenhorn/omawrite).
 
 ```sh
 ./bin/build    # build/omawrite
-./bin/test     # 116 passing
+./bin/test     # 127 passing
 ```
 
 ## What is in it
@@ -61,6 +61,15 @@ Written here:
 - **Escape dismisses the external-change prompt** — it answers nothing, so a
   file removed outside Omawrite stays removed and the writing carries on. An
   explicit `Ctrl+S` is what answers it.
+- **Claude panel** (`Alt+G`) — a dock on the right where Claude answers beside
+  the document rather than in a terminal in the next tile. One turn is one
+  `claude -p --output-format stream-json` child, started in the folder the
+  document lives in, with the question on stdin and the answer streamed back.
+  It is told the path, the caret line and the selection, and that the running
+  window answers `--read`. The buffer is saved before a turn, so an edit the
+  agent makes reloads without the external-change prompt.
+  [`docs/AGENT.md`](AGENT.md) has the rest, including the permission mode and
+  what it costs.
 - **Preview scroll sync** — the toggle used to drop the reader at the top.
 - **Link hover** — reworked from #8 onto #40's existing hover, rather than
   adding a third MouseArea over the editor.
@@ -83,3 +92,7 @@ Written here:
   choosing which one is not yet answered.
 - The preview keeps its place through a toggle, but it does not follow the
   caret while you write.
+- The Claude panel is phase one: it answers, and its edits reach the editor
+  through the file. Insert-at-cursor and replace-the-selection from an answer,
+  a D-Bus write call so an agent edit is one undoable mutation, and a queue for
+  a question asked mid-turn are all still to build.

@@ -29,10 +29,11 @@ ApplicationWindow {
     readonly property int editorFontPixelSize: scaledSize(backend.editorFontSize)
     // Never wider than the Flickable's viewport, whatever the measure asks for:
     // a tiling compositor can resize the window below its minimum width.
+    readonly property int dockedWidth: fileSidebar.width + agentPanel.width
     readonly property int availableEditorWidth: Math.min(
-        Math.max(360, width - fileSidebar.width
+        Math.max(360, width - dockedWidth
                  - Math.round(writerFontMetrics.averageCharacterWidth * 20)),
-        Math.max(0, width - fileSidebar.width - 48))
+        Math.max(0, width - dockedWidth - 48))
     readonly property int editorWidth: layoutSettings.editorColumns > 0
         ? Math.min(Math.round(writerFontMetrics.averageCharacterWidth
                               * Math.max(20, layoutSettings.editorColumns)),
@@ -41,6 +42,8 @@ ApplicationWindow {
     property bool searchOpen: false
     property bool sidebarOpen: false
     property int sidebarLogicalWidth: 240
+    property bool agentOpen: false
+    property int agentLogicalWidth: 380
     property bool searchUpdating: false
     property var searchMatches: []
     property int searchMatchIndex: -1
@@ -93,6 +96,33 @@ ApplicationWindow {
 
     function toggleSidebar() {
         setSidebarOpen(!sidebarOpen);
+    }
+
+    function setAgentOpen(open) {
+        agentOpen = open;
+        if (open)
+            agentPanel.focusInput();
+        else
+            editor.forceActiveFocus();
+    }
+
+    function toggleAgent() {
+        setAgentOpen(!agentOpen);
+    }
+
+    // The caret's line, as a person counts them, so a question about "this
+    // paragraph" has somewhere to start.
+    function caretLine() {
+        return editor.text.substring(0, editor.cursorPosition).split("\n").length;
+    }
+
+    // Save before asking: the agent reads the file, and the file should be the
+    // text on screen. It also leaves the buffer unmodified, which is what lets
+    // an edit the agent makes reload without a prompt.
+    function askAgent(question) {
+        backend.saveNow();
+        agent.ask(question, backend.fileUrl, caretLine(), editor.selectedText,
+                  backend.folderUrl);
     }
 
     function requestOpen(url) {
@@ -568,6 +598,14 @@ ApplicationWindow {
         onActivated: backend.openDialog()
     }
 
+    // Alt+G, as Omamail's panel takes, so the two docks answer the same key.
+    Shortcut {
+        objectName: "agentShortcut"
+        sequence: "Alt+G"
+        context: Qt.ApplicationShortcut
+        onActivated: win.toggleAgent()
+    }
+
     Shortcut {
         objectName: "newWindowShortcut"
         sequence: "Ctrl+N"
@@ -730,7 +768,7 @@ ApplicationWindow {
         x: Math.round((win.width - width) / 2)
         y: Math.round((win.height - height) / 2)
         contentItem: Label {
-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Shift+J  Unwrap hard-wrapped lines\nCtrl+Shift+C  Copy on select on/off\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+/  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
+            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nAlt+G  Claude\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Shift+J  Unwrap hard-wrapped lines\nCtrl+Shift+C  Copy on select on/off\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+/  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
             lineHeight: 1.5
         }
     }
@@ -780,9 +818,43 @@ ApplicationWindow {
         onDismissed: editor.forceActiveFocus()
     }
 
+    AgentPanel {
+        id: agentPanel
+        objectName: "agentPanel"
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        expanded: win.agentOpen
+        darkMode: win.darkMode
+        textScale: win.textScale
+        pageColor: win.pageColor
+        textColor: win.textColor
+        mutedColor: win.mutedColor
+        accentColor: backend.themeAccent
+        selectionFill: win.selectionFill
+        messages: agent.messages
+        running: agent.running
+        available: agent.available
+        activity: agent.activity
+        documentName: backend.fileName
+        logicalWidth: win.agentLogicalWidth
+        // Never let the panel squeeze the writing column below its minimum.
+        maximumLogicalWidth: Math.max(minimumLogicalWidth,
+                                      Math.round(win.width / win.textScale)
+                                      - 420 - Math.round(fileSidebar.width / win.textScale))
+
+        onAsked: function(question) { win.askAgent(question); }
+        onInterrupted: agent.interrupt()
+        onNewChatRequested: agent.newChat()
+        onWidthChangeRequested: function(width) { win.agentLogicalWidth = width; }
+        onWidthCommitted: backend.saveAgentPanelWidth(win.agentLogicalWidth)
+        onDismissed: win.setAgentOpen(false)
+    }
+
     Item {
         anchors.fill: parent
         anchors.leftMargin: fileSidebar.width
+        anchors.rightMargin: agentPanel.width
 
         // A surface rather than a bare Item: the document scrolls behind this,
         // and with nothing opaque the text showed through the gaps between the
@@ -1847,6 +1919,14 @@ ApplicationWindow {
                 }
 
                 FooterIconButton {
+                    objectName: "agentButton"
+                    iconName: "assistant"
+                    iconColor: win.agentOpen ? backend.themeAccent : win.mutedColor
+                    tooltip: "Claude"
+                    onClicked: win.toggleAgent()
+                }
+
+                FooterIconButton {
                     objectName: "modeToggle"
                     iconName: "preview"
                     iconColor: win.mutedColor
@@ -2057,6 +2137,7 @@ ApplicationWindow {
 
     Component.onCompleted: {
         sidebarLogicalWidth = backend.sidebarWidth();
+        agentLogicalWidth = backend.agentPanelWidth();
         var geometry = backend.windowGeometry();
         if (geometry.x >= 0) x = geometry.x;
         if (geometry.y >= 0) y = geometry.y;

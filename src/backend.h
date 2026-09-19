@@ -126,6 +126,8 @@ public:
     Q_INVOKABLE QUrl createFolder(const QString &name);
     Q_INVOKABLE int sidebarWidth() const;
     Q_INVOKABLE void saveSidebarWidth(int width);
+    Q_INVOKABLE int agentPanelWidth() const;
+    Q_INVOKABLE void saveAgentPanelWidth(int width);
     Q_INVOKABLE void open(const QUrl &url);
     Q_INVOKABLE void save();
     Q_INVOKABLE void saveNow();

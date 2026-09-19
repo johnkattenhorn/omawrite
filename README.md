@@ -86,6 +86,8 @@ window is closed while `--open` does not.
   and hands the keyboard back to the text — it never reaches into the panel
   while you are writing. It starts closed.
 - `Ctrl+Shift+P` toggles the Markdown preview.
+- `Alt+G` opens the Claude panel on the right of the window, and closes it
+  again. See [Claude beside the document](docs/AGENT.md).
 - `Ctrl+N` opens a new Omawrite window.
 - `Ctrl+Z`, `Ctrl+Shift+Z`, and `Ctrl+Y` handle undo and redo.
 - `Super+F` toggles fullscreen. Qt maps this key as `Meta+F`.
@@ -140,6 +142,21 @@ starts from the document being written.
 
 Drag its right edge to widen it; the width is remembered, and stops short of
 squeezing the writing column below its usual measure.
+
+## Claude panel
+
+`Alt+G`, or the speech-bubble button in the footer, opens a dock on the right
+and asks Claude there rather than in a terminal in the next tile. It knows
+which document is open, where the caret is and what is selected, and the turn
+runs in the folder the document lives in, so the notes beside it can be read
+without naming a path. Answers stream in as they are written. A line above the
+input says what the turn is doing and for how long, and `Escape` or `stop`
+ends it.
+
+It drives the `claude` command line non-interactively, which means it can write
+anything you can write without asking first. [docs/AGENT.md](docs/AGENT.md)
+covers what it is told, what it runs, how an edit it makes reaches the editor,
+and what has not been built yet.
 
 ## Measure
 

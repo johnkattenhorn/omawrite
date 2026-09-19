@@ -61,6 +61,19 @@ Item {
                 context.quadraticCurveTo(8, 15.5, 2, 8.5);
                 context.moveTo(6.5, 8.5);
                 context.arc(8, 8.5, 1.5, 0, Math.PI * 2);
+            } else if (control.iconName === "assistant") {
+                // A speech bubble with its tail on the writing side, so the
+                // panel's button reads as something answering the page.
+                context.moveTo(2.5, 4.5);
+                context.lineTo(13.5, 4.5);
+                context.lineTo(13.5, 11);
+                context.lineTo(6.5, 11);
+                context.lineTo(4, 13.5);
+                context.lineTo(4, 11);
+                context.lineTo(2.5, 11);
+                context.closePath();
+                context.moveTo(5.5, 7.5);
+                context.lineTo(10.5, 7.5);
             } else if (control.iconName === "open") {
                 context.moveTo(2.5, 13);
                 context.lineTo(2.5, 3.5);

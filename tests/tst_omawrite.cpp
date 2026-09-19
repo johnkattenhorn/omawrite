@@ -22,6 +22,7 @@
 #include <QQuickWindow>
 
 #include "cli.h"
+#include "agentsession.h"
 #include "backend.h"
 #include "markdownhighlighter.h"
 
@@ -695,6 +696,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -748,6 +751,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -810,6 +815,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -846,6 +853,8 @@ private slots:
 
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -894,6 +903,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -964,6 +975,8 @@ private slots:
 
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1006,6 +1019,8 @@ private slots:
 
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1086,6 +1101,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1135,6 +1152,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1177,6 +1196,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1373,6 +1394,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1421,6 +1444,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1460,6 +1485,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1501,6 +1528,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1546,6 +1575,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1583,6 +1614,8 @@ private slots:
 
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1610,6 +1643,8 @@ private slots:
         Backend second(secondState.path());
         second.setFolder(QUrl::fromLocalFile(folder.path()));
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &second);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QScopedPointer<QObject> secondWindow(component.create());
         QVERIFY2(secondWindow, qPrintable(component.errorString()));
         QObject *secondEditor =
@@ -1634,6 +1669,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1704,6 +1741,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1758,6 +1797,8 @@ private slots:
 
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1786,6 +1827,8 @@ private slots:
 
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1825,6 +1868,8 @@ private slots:
 
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1867,6 +1912,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -1910,6 +1957,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -2151,6 +2200,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -2185,6 +2236,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> object(component.create());
@@ -2261,6 +2314,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> object(component.create());
@@ -2478,6 +2533,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3009,6 +3066,8 @@ private slots:
 
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3032,6 +3091,8 @@ private slots:
         Backend backend(tabState.path());
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3055,6 +3116,8 @@ private slots:
 
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3079,6 +3142,8 @@ private slots:
 
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3102,6 +3167,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3131,6 +3198,8 @@ private slots:
             Backend writer(stateDirectory.path());
             QQmlEngine engine;
             engine.rootContext()->setContextProperty(QStringLiteral("backend"), &writer);
+            engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                      new AgentSession(&engine));
             QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
             QVERIFY2(component.isReady(), qPrintable(component.errorString()));
             QScopedPointer<QObject> window(component.create());
@@ -3159,6 +3228,8 @@ private slots:
         Backend reader(stateDirectory.path());
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &reader);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3178,6 +3249,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> root(component.create());
@@ -3315,6 +3388,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3407,6 +3482,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3473,6 +3550,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3532,6 +3611,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3633,6 +3714,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3714,6 +3797,8 @@ private slots:
         Backend backend;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3827,7 +3912,10 @@ private slots:
             FILE *replaced = freopen(input.fileName().toLocal8Bit().constData(), "r", stdin);
             QVERIFY(replaced);
             const int code = Cli::appendStdin(path);
-            fclose(stdin);
+            // Put stdin back rather than closing it: a process running on with
+            // descriptor 0 free hands it to the next pipe anything opens, and
+            // a QProcess further down the run could not write to its child.
+            QVERIFY(freopen("/dev/null", "r", stdin));
             QCOMPARE(code, 0);
         };
 
@@ -3857,6 +3945,8 @@ private slots:
         Backend backend(tabState.path());
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3912,6 +4002,8 @@ private slots:
         Backend backend(tabState.path());
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -3968,6 +4060,8 @@ private slots:
         Backend backend(tabState.path());
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -4013,6 +4107,8 @@ private slots:
         Backend backend(tabState.path());
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -4045,6 +4141,8 @@ private slots:
         Backend backend(tabState.path());
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -4078,6 +4176,8 @@ private slots:
         Backend backend(tabState.path());
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -4116,6 +4216,8 @@ private slots:
         Backend backend(tabState.path());
         QQmlEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
         QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> window(component.create());
@@ -4141,7 +4243,339 @@ private slots:
         QVERIFY2(shortcut, "nothing is bound to Ctrl+/");
     }
 
+    // --- The panel Claude answers in -------------------------------------
+
+    void runsInTheFolderTheDocumentLivesIn() {
+        QTemporaryDir documents;
+        QVERIFY(documents.isValid());
+        QTemporaryDir browsing;
+        QVERIFY(browsing.isValid());
+        const QString note = documents.filePath(QStringLiteral("note.md"));
+
+        QCOMPARE(AgentSession::directoryFor(note, browsing.path()), documents.path());
+        // An untitled document has no folder of its own, so it borrows the one
+        // the sidebar is showing.
+        QCOMPARE(AgentSession::directoryFor(QString(), browsing.path()), browsing.path());
+        // And with neither, somewhere that exists rather than nowhere.
+        QCOMPARE(AgentSession::directoryFor(QString(), QString()), QDir::homePath());
+    }
+
+    void tellsClaudeWhatIsOnScreenAndHowToReadIt() {
+        QTemporaryDir documents;
+        QVERIFY(documents.isValid());
+        const QString note = documents.filePath(QStringLiteral("note.md"));
+
+        const QString preamble = AgentSession::preamble(note, 12,
+                                                        QStringLiteral("a chosen sentence"),
+                                                        QString());
+        QVERIFY(preamble.contains(note));
+        QVERIFY(preamble.contains(QStringLiteral("line 12")));
+        QVERIFY(preamble.contains(QStringLiteral("a chosen sentence")));
+        QVERIFY(preamble.contains(documents.path()));
+        // The reading calls are the reason a question about an unsaved
+        // paragraph can be answered at all.
+        QVERIFY(preamble.contains(QStringLiteral("omawrite --read")));
+
+        // A selection is the writer's words, so it arrives fenced rather than
+        // loose in the instructions.
+        QVERIFY(preamble.contains(QStringLiteral("```\na chosen sentence\n```")));
+    }
+
+    void showsTheWorkWithoutShowingItsArguments() {
+        QVariantMap input;
+        input[QStringLiteral("file_path")] = QStringLiteral("/home/writer/notes/standup.md");
+        QCOMPARE(AgentSession::activityFor(QStringLiteral("Read"), input),
+                 QStringLiteral("Reading standup.md"));
+        QCOMPARE(AgentSession::activityFor(QStringLiteral("Edit"), input),
+                 QStringLiteral("Editing standup.md"));
+
+        QVariantMap command;
+        command[QStringLiteral("command")] = QStringLiteral("git log --oneline -20");
+        const QString shown = AgentSession::activityFor(QStringLiteral("Bash"), command);
+        QCOMPARE(shown, QStringLiteral("Running a command"));
+        QVERIFY2(!shown.contains(QStringLiteral("git")), "the command itself is not the panel's");
+    }
+
+    void asksWithoutATerminalAndWithoutAnArgumentList() {
+        FakeClaude claude;
+        QVERIFY(claude.ok);
+        claude.setStream({
+            R"({"type":"system","subtype":"init","session_id":"S1"})",
+            R"({"type":"result","subtype":"success","is_error":false,"session_id":"S1","result":"ok"})",
+        });
+
+        QTemporaryDir documents;
+        QVERIFY(documents.isValid());
+        const QString note = documents.filePath(QStringLiteral("note.md"));
+        QVERIFY(writeFile(note, QByteArrayLiteral("# Note\n")));
+
+        AgentSession session;
+        session.ask(QStringLiteral("what is this about"), QUrl::fromLocalFile(note), 1,
+                    QString(), QUrl::fromLocalFile(documents.path()));
+        QTRY_VERIFY(!session.running());
+
+        const QStringList arguments = claude.recorded(QStringLiteral("args"))
+            .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        QVERIFY(arguments.contains(QStringLiteral("-p")));
+        QVERIFY(arguments.contains(QStringLiteral("stream-json")));
+        QVERIFY(arguments.contains(QStringLiteral("--include-partial-messages")));
+        // No approval prompt: a child with no terminal cannot answer one, and
+        // the turn would wait for it forever.
+        QVERIFY(arguments.contains(QStringLiteral("--permission-mode")));
+        QVERIFY(arguments.contains(QStringLiteral("dontAsk")));
+        // A first turn has no session to resume.
+        QVERIFY(!arguments.contains(QStringLiteral("--resume")));
+
+        // The question goes in on stdin. An argument list is readable by every
+        // other process on the machine, and a document's words are not.
+        const QString stdinText = claude.recorded(QStringLiteral("stdin"));
+        QVERIFY(stdinText.contains(QStringLiteral("what is this about")));
+        QVERIFY(stdinText.contains(note));
+        QVERIFY2(!claude.recorded(QStringLiteral("args")).contains(QStringLiteral("what is this")),
+                 "the question must not be an argument");
+
+        // And it runs where the document lives, which is the whole point:
+        // everything beside it is readable without being copied into a prompt.
+        QCOMPARE(QFileInfo(claude.recorded(QStringLiteral("cwd")).trimmed()).canonicalFilePath(),
+                 QFileInfo(documents.path()).canonicalFilePath());
+    }
+
+    void streamsTheAnswerAndLeavesTheThinkingOut() {
+        FakeClaude claude;
+        QVERIFY(claude.ok);
+        claude.setStream({
+            R"({"type":"system","subtype":"init","session_id":"S1"})",
+            R"({"type":"stream_event","session_id":"S1","event":{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"weighing it up"}}})",
+            R"({"type":"stream_event","session_id":"S1","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Two "}}})",
+            R"({"type":"stream_event","session_id":"S1","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"notes."}}})",
+            QStringLiteral("this line is not JSON at all"),
+            R"({"type":"assistant","session_id":"S1","message":{"content":[{"type":"text","text":"Two notes."}]}})",
+            R"({"type":"result","subtype":"success","is_error":false,"session_id":"S1","result":"Two notes."})",
+        });
+
+        AgentSession session;
+        session.ask(QStringLiteral("read it back to me"), QUrl(), 0, QString(), QUrl());
+        QTRY_VERIFY(!session.running());
+
+        const QVariantList messages = session.messages();
+        QCOMPARE(messages.size(), 2);
+        QCOMPARE(messages.at(0).toMap().value(QStringLiteral("role")).toString(),
+                 QStringLiteral("you"));
+        QCOMPARE(messages.at(1).toMap().value(QStringLiteral("role")).toString(),
+                 QStringLiteral("claude"));
+        // The deltas are the answer. The assistant message that repeats them
+        // whole is not a second answer, and the thinking is not the panel's to
+        // show.
+        QCOMPARE(messages.at(1).toMap().value(QStringLiteral("text")).toString(),
+                 QStringLiteral("Two notes."));
+        QVERIFY(session.activity().isEmpty());
+    }
+
+    void answersEvenWithoutPartialMessages() {
+        FakeClaude claude;
+        QVERIFY(claude.ok);
+        claude.setStream({
+            R"({"type":"assistant","session_id":"S1","message":{"content":[{"type":"text","text":"Whole."}]}})",
+            R"({"type":"result","subtype":"success","is_error":false,"session_id":"S1","result":"Whole."})",
+        });
+
+        AgentSession session;
+        session.ask(QStringLiteral("anything"), QUrl(), 0, QString(), QUrl());
+        QTRY_VERIFY(!session.running());
+        QCOMPARE(session.messages().size(), 2);
+        QCOMPARE(session.messages().at(1).toMap().value(QStringLiteral("text")).toString(),
+                 QStringLiteral("Whole."));
+    }
+
+    void carriesTheConversationIntoTheNextTurn() {
+        FakeClaude claude;
+        QVERIFY(claude.ok);
+        claude.setStream({
+            R"({"type":"system","subtype":"init","session_id":"S1"})",
+            R"({"type":"stream_event","session_id":"S1","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"First."}}})",
+            R"({"type":"result","subtype":"success","is_error":false,"session_id":"S1","result":"First."})",
+        });
+
+        AgentSession session;
+        session.ask(QStringLiteral("first"), QUrl(), 0, QString(), QUrl());
+        QTRY_VERIFY(!session.running());
+
+        session.ask(QStringLiteral("and now the second"), QUrl(), 0, QString(), QUrl());
+        QTRY_VERIFY(!session.running());
+
+        const QStringList arguments = claude.recorded(QStringLiteral("args"))
+            .split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        QVERIFY(arguments.contains(QStringLiteral("--resume")));
+        QVERIFY(arguments.contains(QStringLiteral("S1")));
+        // Forked, so two chats carrying on from one turn cannot answer each
+        // other's questions.
+        QVERIFY(arguments.contains(QStringLiteral("--fork-session")));
+
+        // A follow-up is the question, not the whole standing brief again.
+        const QString stdinText = claude.recorded(QStringLiteral("stdin"));
+        QCOMPARE(stdinText.trimmed(), QStringLiteral("and now the second"));
+
+        // Starting again drops the session with the history.
+        session.newChat();
+        QVERIFY(session.messages().isEmpty());
+        session.ask(QStringLiteral("fresh"), QUrl(), 0, QString(), QUrl());
+        QTRY_VERIFY(!session.running());
+        QVERIFY(!claude.recorded(QStringLiteral("args")).contains(QStringLiteral("--resume")));
+    }
+
+    void saysSoWhenTheTurnFails() {
+        FakeClaude claude;
+        QVERIFY(claude.ok);
+        claude.setStream({});
+        claude.setExitCode(1);
+
+        AgentSession session;
+        session.ask(QStringLiteral("anything"), QUrl(), 0, QString(), QUrl());
+        QTRY_VERIFY(!session.running());
+
+        // The empty answer is taken away rather than left as a blank bubble,
+        // and what happened is said in its place.
+        const QVariantList messages = session.messages();
+        QCOMPARE(messages.size(), 2);
+        QCOMPARE(messages.at(1).toMap().value(QStringLiteral("role")).toString(),
+                 QStringLiteral("trouble"));
+        QVERIFY(messages.at(1).toMap().value(QStringLiteral("text")).toString()
+                    .contains(QStringLiteral("login or permissions")));
+    }
+
+    void stoppingTheTurnTakesItsToolsWithIt() {
+        FakeClaude claude;
+        QVERIFY(claude.ok);
+        // A turn that has started something of its own, so stopping it has to
+        // reach further than the process the panel itself started.
+        claude.setBody(QStringLiteral("sleep 5\ntouch \"$dir/finished\"\n"));
+
+        AgentSession session;
+        session.ask(QStringLiteral("take your time"), QUrl(), 0, QString(), QUrl());
+        QVERIFY(session.running());
+        session.interrupt();
+        QVERIFY(!session.running());
+
+        QTest::qWait(900);
+        QVERIFY2(!QFileInfo::exists(claude.path(QStringLiteral("finished"))),
+                 "the work the turn started outlived the turn");
+    }
+
+    void refusesASecondTurnWhileOneIsRunning() {
+        FakeClaude claude;
+        QVERIFY(claude.ok);
+        claude.setBody(QStringLiteral("sleep 5\n"));
+
+        AgentSession session;
+        session.ask(QStringLiteral("first"), QUrl(), 0, QString(), QUrl());
+        QVERIFY(session.running());
+        const int asked = session.messages().size();
+        session.ask(QStringLiteral("second"), QUrl(), 0, QString(), QUrl());
+        QCOMPARE(session.messages().size(), asked);
+        session.interrupt();
+    }
+
+    void opensThePanelWithoutSqueezingTheWriting() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                 new AgentSession(&engine));
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        auto *panel = window->findChild<QQuickItem *>(QStringLiteral("agentPanel"));
+        QVERIFY(panel);
+        QCOMPARE(panel->width(), qreal(0));
+
+        const int writingWidth = window->property("editorWidth").toInt();
+        window->setProperty("agentOpen", true);
+        QTRY_VERIFY(panel->width() > 0);
+        // The dock takes its width from the window, not from the document: the
+        // writing column narrows rather than sliding under the panel.
+        QVERIFY(window->property("editorWidth").toInt() <= writingWidth);
+        QCOMPARE(window->property("dockedWidth").toInt(), int(panel->width()));
+    }
+
 private:
+    // A stand-in for the Claude command line: it records the arguments, the
+    // working directory and the stdin it was handed, then prints whatever
+    // stream the test put in front of it. The panel is tested against a real
+    // child process this way, without a model behind it.
+    struct FakeClaude {
+        FakeClaude() {
+            ok = directory.isValid() && setBody(QStringLiteral("cat \"$dir/stream\" 2>/dev/null\n"
+                                                               "exit $(cat \"$dir/exit\" "
+                                                               "2>/dev/null || echo 0)\n"));
+            if (ok)
+                qputenv("OMAWRITE_CLAUDE", program().toUtf8());
+        }
+        ~FakeClaude() { qunsetenv("OMAWRITE_CLAUDE"); }
+
+        QString program() const { return directory.filePath(QStringLiteral("claude")); }
+        QString path(const QString &name) const { return directory.filePath(name); }
+
+        bool setBody(const QString &body) {
+            // Built by hand rather than through QString::arg, which would
+            // leave printf's %% alone and record nothing.
+            const QString script = QStringLiteral("#!/bin/sh\ndir=\"")
+                + directory.path()
+                + QStringLiteral("\"\n"
+                                 "printf '%s\\n' \"$@\" > \"$dir/args\"\n"
+                                 "pwd > \"$dir/cwd\"\n"
+                                 "cat > \"$dir/stdin\"\n")
+                + body;
+            QFile file(program());
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+                return false;
+            if (file.write(script.toUtf8()) != qint64(script.toUtf8().size()))
+                return false;
+            file.close();
+            return file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                       | QFileDevice::ExeOwner);
+        }
+
+        bool setStream(const QStringList &lines) {
+            QFile file(path(QStringLiteral("stream")));
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+                return false;
+            for (const QString &line : lines)
+                file.write(line.toUtf8() + '\n');
+            return true;
+        }
+
+        bool setExitCode(int code) {
+            QFile file(path(QStringLiteral("exit")));
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+                return false;
+            return file.write(QByteArray::number(code)) > 0;
+        }
+
+        QString recorded(const QString &name) const {
+            QFile file(path(name));
+            if (!file.open(QIODevice::ReadOnly))
+                return QString();
+            return QString::fromUtf8(file.readAll());
+        }
+
+        QTemporaryDir directory;
+        bool ok = false;
+    };
+
+    static bool writeFile(const QString &path, const QByteArray &contents) {
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            return false;
+        return file.write(contents) == qint64(contents.size());
+    }
+
     // Points HOME at a scratch tree holding one colors.toml, and puts it back on the way out.
     struct ScopedTheme {
         explicit ScopedTheme(const QByteArray &palette) {
@@ -4232,6 +4666,10 @@ private:
             return nullptr;
 
         engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+
+                                                  new AgentSession(&engine));
         component.loadUrl(QUrl::fromLocalFile(mainQmlPath));
         if (!component.isReady())
             return nullptr;

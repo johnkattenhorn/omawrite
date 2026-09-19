@@ -2,6 +2,56 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-19 — Claude writes beside the document, in a panel the window owns
+
+Working with an agent on a document has meant a terminal in the next tile: it
+knows the folder, and nothing about the writing. It cannot see which file is in
+front of you, where the caret is, or what you just selected, so every question
+starts by typing a path. The panel exists to close that gap, not to add a chat
+window.
+
+[Omamail](https://github.com/huacnlee/omamail) had already built the shape —
+`docs/AGENT.md` there is a full account of it — and it is the same stack, Qt
+and QML over a native backend. What is taken from it: a dock on the right, a
+child process per turn, `claude -p --output-format stream-json
+--include-partial-messages`, the question on stdin rather than in an argument,
+`--resume <id> --fork-session` for a follow-up, and a panel that shows answer
+text and public status but never raw tool arguments or reasoning.
+
+What is deliberately different is the working directory. Omamail runs the CLI
+in a private per-turn state directory and hands it mail as JSON, because mail
+is not a file. A document is a file, so the panel runs the CLI in the folder
+the document lives in and lets Claude's own tools do the reading. That is the
+whole feature request — "access all the other things in the working directory"
+— and it costs no context plumbing at all. An untitled document has no folder
+of its own, so it borrows the one the sidebar is showing.
+
+The turn is given the document's path, the caret line and the selection, and is
+told that `omawrite --read`, `--tabs` and `--open` reach the running window.
+The reading calls landed yesterday for scripts and outside agents; the panel is
+their first caller, and the reason a question about "this paragraph" can be
+answered while the paragraph is still unsaved.
+
+An agent that edits the document is the part that could go wrong: the editor
+holds a buffer, autosave writes it, and a file changing underneath raises the
+external-change prompt. The rule `reportExternalChange` already follows answers
+it — a document holding no local changes takes the newer text silently — so the
+panel saves the buffer before it starts a turn. An edit Claude makes then lands
+in the editor without a dialog, and the prompt comes back only when the writer
+typed during the turn, which is a real conflict and worth being asked about.
+
+Permissions are `dontAsk`, as Omamail's are, because a headless child cannot
+ask: an approval prompt with nowhere to appear leaves the panel waiting
+forever. The consequence is stated rather than mitigated — inside the panel
+Claude writes anything this user can write, with no confirmation. The mode is
+read from `agent/permissionMode` so it can be narrowed without a rebuild, and
+narrowing it to a mode that prompts will hang a turn instead of protecting it.
+
+Phase 1 is the panel, the stream and the folder. Insert-at-cursor and
+replace-selection from a finished answer come next, and a D-Bus write call after
+that, so an agent edit can arrive as one undoable buffer mutation rather than a
+file change the watcher has to notice.
+
 ## 2026-09-18 — The reading calls answer from the window, not the session file
 
 `--list-tabs` reads `session.json`, which is what autosave last wrote. That is

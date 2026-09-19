@@ -11,6 +11,7 @@
 #include <QTimer>
 #include <QWindow>
 
+#include "agentsession.h"
 #include "backend.h"
 #include "workspacesession.h"
 
@@ -91,6 +92,9 @@ Backend *WindowManager::createWindow(const QString &windowId) {
     backend->setTextScale(m_textScale);
     auto *context = new QQmlContext(m_engine->rootContext());
     context->setContextProperty(QStringLiteral("backend"), backend);
+    // One conversation per window, owned by that window's Backend so it goes
+    // when the window does, taking any turn still running with it.
+    context->setContextProperty(QStringLiteral("agent"), new AgentSession(backend));
     QQmlComponent component(m_engine, m_qmlUrl, backend);
     QObject *window = component.create(context);
     if (!window) {

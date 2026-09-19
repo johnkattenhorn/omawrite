@@ -50,6 +50,7 @@ constexpr int minimumEditorFontSize = 10;
 constexpr int maximumEditorFontSize = 48;
 const QString browseDirectorySetting = QStringLiteral("file/browseDirectory");
 const QString sidebarWidthSetting = QStringLiteral("window/sidebarWidth");
+const QString agentPanelWidthSetting = QStringLiteral("window/agentPanelWidth");
 
 class PreviewDocument final : public QTextDocument {
 public:
@@ -531,6 +532,14 @@ int Backend::sidebarWidth() const {
 
 void Backend::saveSidebarWidth(int width) {
     QSettings().setValue(sidebarWidthSetting, width);
+}
+
+int Backend::agentPanelWidth() const {
+    return QSettings().value(agentPanelWidthSetting, 380).toInt();
+}
+
+void Backend::saveAgentPanelWidth(int width) {
+    QSettings().setValue(agentPanelWidthSetting, width);
 }
 
 void Backend::open(const QUrl &url) {
