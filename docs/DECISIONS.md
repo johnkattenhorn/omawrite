@@ -2,6 +2,29 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-19 — The chrome follows Omamail, down to the mix
+
+Omamail is the other Qt window in this desktop doing the same kind of work, so
+it is the standard this fork measures its chrome against rather than inventing
+a second one.
+
+Three things come from it. The AI control sits at the window's far edge, away
+from the verbs that act on what is in front of you: its header right, and here
+the footer right, since Omawrite has no header. The icons are Nerd Font glyphs
+from the Material Design Icons range the Omarchy shell draws its own bar from,
+so a verb in the editor looks like the same verb on the desktop —
+`content-save-outline`, `folder-open-outline`, `dock-left`, `eye-outline`, and
+`robot-outline` for the agent, which is the glyph Omamail's own AI button
+draws. And they are drawn at Omamail's `dim`, which is 68% foreground over 32%
+background mixed from the live theme, rather than at a fixed grey behind 0.55
+opacity: the old footer read as decoration you were meant to ignore.
+
+The drawn icons stay in the file as a fallback. A machine with no Nerd Font
+installed would otherwise show five boxes, and Omawrite ships to machines that
+are not this one. `FooterIconButton` picks the first Nerd family it finds and
+falls back to the Canvas path when it finds none, so the question is answered
+per machine rather than at build time.
+
 ## 2026-09-19 — Claude writes beside the document, in a panel the window owns
 
 Working with an agent on a document has meant a terminal in the next tile: it

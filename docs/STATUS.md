@@ -10,13 +10,13 @@ drive.
 
 ## Where it is
 
-Branch `agent-panel`, 112 commits ahead of `origin/master` (upstream `8f98892`),
-off `custom`. 127 tests pass. Clean build, no warnings. Pushed to
+Branch `agent-panel`, 113 commits ahead of `origin/master` (upstream `8f98892`),
+off `custom`. 130 tests pass. Clean build, no warnings. Pushed to
 [johnkattenhorn/omawrite](https://github.com/johnkattenhorn/omawrite).
 
 ```sh
 ./bin/build    # build/omawrite
-./bin/test     # 127 passing
+./bin/test     # 130 passing
 ```
 
 ## What is in it
@@ -70,6 +70,11 @@ Written here:
   agent makes reloads without the external-change prompt.
   [`docs/AGENT.md`](AGENT.md) has the rest, including the permission mode and
   what it costs.
+- **Omamail's chrome** — the AI control sits at the footer's right edge as
+  Omamail's sits at its header's, the icons are Nerd Font glyphs from the
+  Material Design Icons range the Omarchy shell draws from, and they are drawn
+  at Omamail's `dim` mix rather than a fixed grey behind 0.55 opacity. The
+  drawn icons stay as the fallback for a machine with no Nerd Font.
 - **Preview scroll sync** — the toggle used to drop the reader at the top.
 - **Link hover** — reworked from #8 onto #40's existing hover, rather than
   adding a third MouseArea over the editor.

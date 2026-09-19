@@ -1,8 +1,8 @@
 # Claude beside the document
 
-`Alt+G`, or the speech-bubble button in the footer, opens a dock on the right of
-the window. Ask a question in it and Claude answers there, next to the paragraph
-the question is about.
+`Alt+G`, or the robot button at the right of the footer, opens a dock on the
+right of the window. Ask a question in it and Claude answers there, next to
+the paragraph the question is about.
 
 The panel is not a chat window that happens to live in the editor. It knows
 which document is in front of you, where the caret is and what you have

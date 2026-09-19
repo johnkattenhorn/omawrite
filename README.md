@@ -145,7 +145,7 @@ squeezing the writing column below its usual measure.
 
 ## Claude panel
 
-`Alt+G`, or the speech-bubble button in the footer, opens a dock on the right
+`Alt+G`, or the robot button at the right of the footer, opens a dock on the right
 and asks Claude there rather than in a terminal in the next tile. It knows
 which document is open, where the caret is and what is selected, and the turn
 runs in the folder the document lives in, so the notes beside it can be read

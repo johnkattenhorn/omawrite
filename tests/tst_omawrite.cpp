@@ -4243,6 +4243,89 @@ private slots:
         QVERIFY2(shortcut, "nothing is bound to Ctrl+/");
     }
 
+    void keepsTheAgentButtonAtTheFarRight() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                 new AgentSession(&engine));
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        auto *agentButton = window->findChild<QQuickItem *>(QStringLiteral("agentButton"));
+        auto *saveButton = window->findChild<QQuickItem *>(QStringLiteral("saveButton"));
+        auto *footer = window->findChild<QQuickItem *>(QStringLiteral("footer"));
+        QVERIFY(agentButton);
+        QVERIFY(saveButton);
+        QVERIFY(footer);
+
+        // Omamail keeps its AI control at the far edge, away from the verbs
+        // that act on the document. Here that is the right of the footer.
+        const qreal right = agentButton->mapToItem(footer, QPointF(agentButton->width(), 0)).x();
+        QVERIFY(right > saveButton->mapToItem(footer, QPointF()).x());
+        QVERIFY2(footer->width() - right < 24, "the agent button is not against the right edge");
+    }
+
+    void drawsTheChromeAtOmamailsDim() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                 new AgentSession(&engine));
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        const QColor foreground(window->property("textColor").toString());
+        const QColor page(window->property("pageColor").toString());
+        const QColor dim = window->property("dimColor").value<QColor>();
+        // 68% foreground over 32% background, the mix Omamail draws its own
+        // chrome at, taken from the live theme rather than a fixed grey.
+        QCOMPARE(qRound(dim.redF() * 255),
+                 qRound((foreground.redF() * 0.68 + page.redF() * 0.32) * 255));
+        QCOMPARE(qRound(dim.greenF() * 255),
+                 qRound((foreground.greenF() * 0.68 + page.greenF() * 0.32) * 255));
+
+        auto *saveButton = window->findChild<QQuickItem *>(QStringLiteral("saveButton"));
+        QVERIFY(saveButton);
+        QCOMPARE(saveButton->property("iconColor").value<QColor>(), dim);
+        // The whole strip used to sit behind 0.55 opacity, which is what made
+        // the icons read as decoration.
+        QCOMPARE(saveButton->parentItem()->opacity(), qreal(1));
+    }
+
+    void fallsBackToTheDrawnIconWithoutANerdFont() {
+        QQmlEngine engine;
+        QQmlComponent component(&engine,
+                                QUrl::fromLocalFile(QFINDTESTDATA("../src/FooterIconButton.qml")));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> button(component.create());
+        QVERIFY(button);
+
+        // Ask for a glyph, and whether it is drawn depends on the machine
+        // having a face that holds it: a codepoint nothing can render is a box.
+        button->setProperty("glyph", 0xF167A);
+        const bool hasFace = !button->property("nerdFamily").toString().isEmpty();
+        QCOMPARE(button->property("drawsGlyph").toBool(), hasFace);
+
+        button->setProperty("glyph", 0);
+        QVERIFY2(!button->property("drawsGlyph").toBool(),
+                 "an icon with no glyph asked for stays the drawn one");
+    }
+
     // --- The panel Claude answers in -------------------------------------
 
     void runsInTheFolderTheDocumentLivesIn() {

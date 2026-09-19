@@ -21,6 +21,17 @@ ApplicationWindow {
     readonly property color textColor: backend.themeForeground
     readonly property color strongTextColor: backend.themeForeground
     readonly property color mutedColor: darkMode ? "#909191" : "#aeb1b5"
+    // The two dimmed strengths Omamail draws its chrome at, mixed from the
+    // theme rather than fixed, so an icon here is as dark as the same icon in
+    // the mail window: dim for anything you act on, dimmer a step behind it.
+    readonly property color dimColor: Qt.rgba(
+        textColor.r * 0.68 + pageColor.r * 0.32,
+        textColor.g * 0.68 + pageColor.g * 0.32,
+        textColor.b * 0.68 + pageColor.b * 0.32, 1)
+    readonly property color dimmerColor: Qt.rgba(
+        textColor.r * 0.45 + pageColor.r * 0.55,
+        textColor.g * 0.45 + pageColor.g * 0.55,
+        textColor.b * 0.45 + pageColor.b * 0.55, 1)
     readonly property color selectionFill: backend.themeSelection
     // The desktop's text size knob (GNOME's text-scaling-factor, which
     // `omarchy display text size` drives) anchored so its 12px default leaves
@@ -829,7 +840,7 @@ ApplicationWindow {
         textScale: win.textScale
         pageColor: win.pageColor
         textColor: win.textColor
-        mutedColor: win.mutedColor
+        mutedColor: win.dimColor
         accentColor: backend.themeAccent
         selectionFill: win.selectionFill
         messages: agent.messages
@@ -1892,12 +1903,12 @@ ApplicationWindow {
                 anchors.leftMargin: 12
                 anchors.bottomMargin: 10
                 spacing: 12
-                opacity: 0.55
 
                 FooterIconButton {
                     objectName: "saveButton"
                     iconName: "save"
-                    iconColor: win.mutedColor
+                    glyph: 0xF0818  // content-save-outline
+                    iconColor: win.dimColor
                     tooltip: "Save"
                     onClicked: backend.save()
                 }
@@ -1905,7 +1916,8 @@ ApplicationWindow {
                 FooterIconButton {
                     objectName: "openButton"
                     iconName: "open"
-                    iconColor: win.mutedColor
+                    glyph: 0xF0DCF  // folder-open-outline
+                    iconColor: win.dimColor
                     tooltip: "Open"
                     onClicked: backend.openDialog()
                 }
@@ -1913,23 +1925,17 @@ ApplicationWindow {
                 FooterIconButton {
                     objectName: "filesButton"
                     iconName: "files"
-                    iconColor: win.mutedColor
+                    glyph: 0xF10AA  // dock-left, the glyph Omamail's sidebar takes
+                    iconColor: win.dimColor
                     tooltip: "Files"
                     onClicked: win.setSidebarOpen(!win.sidebarOpen)
                 }
 
                 FooterIconButton {
-                    objectName: "agentButton"
-                    iconName: "assistant"
-                    iconColor: win.agentOpen ? backend.themeAccent : win.mutedColor
-                    tooltip: "Claude"
-                    onClicked: win.toggleAgent()
-                }
-
-                FooterIconButton {
                     objectName: "modeToggle"
                     iconName: "preview"
-                    iconColor: win.mutedColor
+                    glyph: 0xF06D0  // eye-outline
+                    iconColor: win.dimColor
                     tooltip: win.previewVisible ? "Editor" : "Preview"
                     onClicked: win.togglePreview()
                 }
@@ -1937,6 +1943,7 @@ ApplicationWindow {
                 Label {
                     text: backend.status
                     color: win.mutedColor
+                    opacity: 0.55
                     font.family: "iA Writer Mono S"
                     font.pixelSize: win.scaledSize(11)
                     visible: text !== ""
@@ -1968,11 +1975,32 @@ ApplicationWindow {
                 }
             }
 
-            Label {
-                id: wordCountLabel
+            // Omamail keeps its AI control at the window's top right, away from
+            // the verbs that act on what is in front of you. Omawrite has no
+            // header, so the same place here is the right of the footer, with
+            // the count moved in beside it.
+            FooterIconButton {
+                id: agentButton
+                objectName: "agentButton"
+                iconName: "assistant"
+                // robot-outline, the glyph Omamail's agent button draws, from
+                // the Material Design Icons range the Omarchy shell uses.
+                glyph: 0xF167A
+                glyphOffset: -1
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 anchors.rightMargin: 12
+                anchors.bottomMargin: 10
+                iconColor: win.agentOpen ? win.textColor : win.dimColor
+                tooltip: "Claude · Alt+G"
+                onClicked: win.toggleAgent()
+            }
+
+            Label {
+                id: wordCountLabel
+                anchors.right: agentButton.left
+                anchors.bottom: parent.bottom
+                anchors.rightMargin: 14
                 anchors.bottomMargin: 10
                 text: backend.wordCount + (backend.wordCount === 1 ? " Word" : " Words")
                 color: win.mutedColor
@@ -2116,19 +2144,22 @@ ApplicationWindow {
 
                 SearchIconButton {
                     iconName: "up"
-                    iconColor: win.darkMode ? win.textColor : "#62635f"
+                    glyph: 0xF0143  // chevron-up
+                    iconColor: win.dimColor
                     onClicked: win.moveSearch(-1)
                 }
 
                 SearchIconButton {
                     iconName: "down"
-                    iconColor: win.darkMode ? win.textColor : "#62635f"
+                    glyph: 0xF0140  // chevron-down
+                    iconColor: win.dimColor
                     onClicked: win.moveSearch(1)
                 }
 
                 SearchIconButton {
                     iconName: "close"
-                    iconColor: win.darkMode ? win.textColor : "#62635f"
+                    glyph: 0xF0156  // close
+                    iconColor: win.dimColor
                     onClicked: win.closeSearch()
                 }
             }
