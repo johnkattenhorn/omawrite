@@ -74,7 +74,10 @@ Written here:
   Omamail's sits at its header's, the icons are Nerd Font glyphs from the
   Material Design Icons range the Omarchy shell draws from, and they are drawn
   at Omamail's `dim` mix rather than a fixed grey behind 0.55 opacity. The
-  drawn icons stay as the fallback for a machine with no Nerd Font.
+  drawn icons stay as the fallback for a machine with no Nerd Font. The window
+  is drawn in the desktop's font at 12, document included, with the bundled
+  iA Writer Mono S as the fallback; heading sizes follow the document's own
+  size rather than a hardcoded 20px.
 - **Preview scroll sync** — the toggle used to drop the reader at the top.
 - **Link hover** — reworked from #8 onto #40's existing hover, rather than
   adding a third MouseArea over the editor.

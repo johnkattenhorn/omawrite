@@ -50,6 +50,7 @@ class Backend : public QObject {
     Q_PROPERTY(bool folderHasParent READ folderHasParent NOTIFY folderChanged)
     Q_PROPERTY(QVariantList folderEntries READ folderEntries NOTIFY folderChanged)
     Q_PROPERTY(bool focusMode READ focusMode NOTIFY focusModeChanged)
+    Q_PROPERTY(QString appFont READ appFont CONSTANT)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -98,6 +99,10 @@ public:
     QVariantList folderEntries() const;
     bool focusMode() const { return m_focusMode; }
     static int countWords(const QString &text);
+    // The face the whole window is drawn in, document included: the desktop's
+    // own, as Omamail takes it, falling back to the bundled writing font on a
+    // machine that does not have it.
+    static QString appFont();
     // The text the editor holds this instant, which is what `omawrite --read`
     // answers with: the session copy is up to an autosave behind it.
     QString currentDocumentText() const;

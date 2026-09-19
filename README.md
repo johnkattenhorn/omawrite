@@ -158,6 +158,13 @@ anything you can write without asking first. [docs/AGENT.md](docs/AGENT.md)
 covers what it is told, what it runs, how an edit it makes reaches the editor,
 and what has not been built yet.
 
+## Font
+
+The window is drawn in the desktop's own monospace font — JetBrainsMono Nerd
+Font where Omarchy has installed it — at 12px, document and Claude panel alike.
+A machine without it falls back to the bundled iA Writer Mono S. `Ctrl++` and
+`Ctrl+-` change the document's size and remember it; `Ctrl+0` goes back to 12.
+
 ## Measure
 
 The writing column is 65 characters wide. To change it, set `editorColumns`

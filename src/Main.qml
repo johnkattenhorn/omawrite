@@ -24,19 +24,10 @@ ApplicationWindow {
     // The two dimmed strengths Omamail draws its chrome at, mixed from the
     // theme rather than fixed, so an icon here is as dark as the same icon in
     // the mail window: dim for anything you act on, dimmer a step behind it.
-    // Omamail draws its chrome in the desktop's own font rather than the one
-    // the document is written in. JetBrainsMono is narrower than iA Writer
-    // Mono S at the same size, so the panel holds more of an answer.
-    readonly property string chromeFont: {
-        const installed = Qt.fontFamilies();
-        const preferred = ["JetBrainsMono Nerd Font", "JetBrainsMono NF",
-                           "JetBrains Mono"];
-        for (var i = 0; i < preferred.length; i++) {
-            if (installed.indexOf(preferred[i]) >= 0)
-                return preferred[i];
-        }
-        return "iA Writer Mono S";
-    }
+    // The desktop's own face, as Omamail is drawn in, for the whole window
+    // including the document. Backend::appFont settles which one that is and
+    // falls back to the bundled writing font where there is no other.
+    readonly property string appFont: backend.appFont
     readonly property color dimColor: Qt.rgba(
         textColor.r * 0.68 + pageColor.r * 0.32,
         textColor.g * 0.68 + pageColor.g * 0.32,
@@ -261,7 +252,7 @@ ApplicationWindow {
 
     FontMetrics {
         id: writerFontMetrics
-        font.family: "iA Writer Mono S"
+        font.family: win.appFont
         font.pixelSize: win.editorFontPixelSize
     }
 
@@ -774,6 +765,7 @@ ApplicationWindow {
         textScale: win.textScale
         textColor: win.textColor
         strongTextColor: win.strongTextColor
+        fontFamily: win.appFont
         containerWidth: win.width
         containerHeight: win.height
 
@@ -811,6 +803,7 @@ ApplicationWindow {
         mutedColor: win.mutedColor
         accentColor: backend.themeAccent
         selectionFill: win.selectionFill
+        fontFamily: win.appFont
         folderUrl: backend.folderUrl
         folderName: backend.folderName
         folderHasParent: backend.folderHasParent
@@ -861,7 +854,7 @@ ApplicationWindow {
         available: agent.available
         activity: agent.activity
         documentName: backend.fileName
-        fontFamily: win.chromeFont
+        fontFamily: win.appFont
         logicalWidth: win.agentLogicalWidth
         // Never let the panel squeeze the writing column below its minimum.
         maximumLogicalWidth: Math.max(minimumLogicalWidth,
@@ -962,7 +955,7 @@ ApplicationWindow {
                                 color: modelData.id === backend.activeBufferId
                                     ? "white"
                                     : win.textColor
-                                font.family: "iA Writer Mono S"
+                                font.family: win.appFont
                                 font.pixelSize: win.scaledSize(11)
                             }
 
@@ -989,7 +982,7 @@ ApplicationWindow {
                                     text: "\u00d7"
                                     color: tabLabel.color
                                     opacity: closeArea.containsMouse ? 1 : 0.5
-                                    font.family: "iA Writer Mono S"
+                                    font.family: win.appFont
                                     font.pixelSize: win.scaledSize(13)
                                 }
 
@@ -1301,7 +1294,7 @@ ApplicationWindow {
                 color: win.textColor
                 selectedTextColor: win.strongTextColor
                 selectionColor: win.selectionFill
-                font.family: "iA Writer Mono S"
+                font.family: win.appFont
                 font.pixelSize: win.editorFontPixelSize
                 font.weight: Font.Normal
                 property bool hoveringLink: false
@@ -1874,7 +1867,7 @@ ApplicationWindow {
                 selectByMouse: true
                 wrapMode: TextEdit.Wrap
                 color: win.textColor
-                font.family: "iA Writer Mono S"
+                font.family: win.appFont
                 font.pixelSize: win.editorFontPixelSize
                 renderType: editor.renderType
                 onWidthChanged: backend.setPreviewWidth(width)
@@ -1918,7 +1911,7 @@ ApplicationWindow {
                 elide: Text.ElideMiddle
                 color: win.mutedColor
                 opacity: 0.75
-                font.family: "iA Writer Mono S"
+                font.family: win.appFont
                 font.pixelSize: win.scaledSize(11)
             }
         }
@@ -1980,7 +1973,7 @@ ApplicationWindow {
                     text: backend.status
                     color: win.mutedColor
                     opacity: 0.55
-                    font.family: "iA Writer Mono S"
+                    font.family: win.appFont
                     font.pixelSize: win.scaledSize(11)
                     visible: text !== ""
                     elide: Text.ElideRight
@@ -2003,7 +1996,7 @@ ApplicationWindow {
                 text: win.notice
                 color: win.mutedColor
                 opacity: win.notice.length > 0 ? 0.9 : 0
-                font.family: "iA Writer Mono S"
+                font.family: win.appFont
                 font.pixelSize: win.scaledSize(11)
 
                 Behavior on opacity {
@@ -2020,7 +2013,7 @@ ApplicationWindow {
                 text: backend.wordCount + (backend.wordCount === 1 ? " Word" : " Words")
                 color: win.mutedColor
                 opacity: 0.75
-                font.family: "iA Writer Mono S"
+                font.family: win.appFont
                 font.pixelSize: win.scaledSize(11)
             }
         }

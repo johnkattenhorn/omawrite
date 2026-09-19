@@ -21,6 +21,7 @@
 #include <QQuickTextDocument>
 #include <QRegularExpression>
 #include <QScreen>
+#include <QFontDatabase>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QJsonDocument>
@@ -45,7 +46,7 @@
 constexpr qreal typoraLineHeightPercent = 140;
 const QString lastSaveDirectorySetting = QStringLiteral("file/lastSaveDirectory");
 const QString editorFontSizeSetting = QStringLiteral("editor/fontSize");
-constexpr int defaultEditorFontSize = 20;
+constexpr int defaultEditorFontSize = 12;
 constexpr int minimumEditorFontSize = 10;
 constexpr int maximumEditorFontSize = 48;
 const QString browseDirectorySetting = QStringLiteral("file/browseDirectory");
@@ -2004,6 +2005,23 @@ QDir Backend::defaultDirectory() const {
 
 QString Backend::currentDocumentText() const {
     return m_document ? m_document->toPlainText() : QString();
+}
+
+QString Backend::appFont() {
+    static const QString family = []() {
+        const QStringList installed = QFontDatabase::families();
+        const QStringList preferred{
+            QStringLiteral("JetBrainsMono Nerd Font"),
+            QStringLiteral("JetBrainsMono NF"),
+            QStringLiteral("JetBrains Mono"),
+        };
+        for (const QString &candidate : preferred) {
+            if (installed.contains(candidate))
+                return candidate;
+        }
+        return QStringLiteral("iA Writer Mono S");
+    }();
+    return family;
 }
 
 int Backend::countWords(const QString &text) {

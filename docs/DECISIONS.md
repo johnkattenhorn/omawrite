@@ -20,10 +20,20 @@ draws. And they are drawn at Omamail's `dim`, which is 68% foreground over 32%
 background mixed from the live theme, rather than at a fixed grey behind 0.55
 opacity: the old footer read as decoration you were meant to ignore.
 
-The panel is drawn in the desktop's font at Omamail's sizes -- 12 for an
-answer, 11 for the chrome -- not in iA Writer Mono S at 13. The writing font
-belongs to the document; a conversation beside it is chrome, and the narrower
-face shows more of an answer at once.
+The whole window is drawn in the desktop's font at Omamail's sizes -- 12 for
+the text, 11 for the chrome around it -- rather than in iA Writer Mono S at 13
+and 20. That started with the panel, where the narrower face shows more of an
+answer at once, and then the document followed it: a panel and a page side by
+side in two faces at two sizes read as two applications. `Backend::appFont`
+settles which face that is once, preferring JetBrainsMono and falling back to
+the bundled iA Writer Mono S, which is still what a machine without it gets.
+
+The heading sizes had to move with it. They were multiples of a hardcoded
+20px, so on a 12px document an H1 came out three times the body; they are
+multiples of the size the document is actually set in now. The same line fixed
+a ratio that had always been a third too large: the multipliers are ratios of
+pixels and `setFontPointSize` takes points, so they now convert at Qt's
+logical 96 DPI.
 
 The drawn icons stay in the file as a fallback. A machine with no Nerd Font
 installed would otherwise show five boxes, and Omawrite ships to machines that

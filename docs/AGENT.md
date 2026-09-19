@@ -18,9 +18,9 @@ new                   forget the conversation, keep the panel
 drag the left edge    resize; double-click it to go back to the default width
 ```
 
-The panel is drawn in the desktop's own font rather than the writing font,
-at Omamail's sizes: 12 for an answer, 11 for the chrome around it. That is
-narrower than iA Writer Mono S, so more of an answer fits beside the page.
+The panel is drawn in the desktop's own font at Omamail's sizes: 12 for an
+answer, 11 for the chrome around it. The document is drawn in the same face at
+the same size, so the page and the conversation beside it read as one window.
 
 ## What Claude is told
 

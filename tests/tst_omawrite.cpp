@@ -732,16 +732,17 @@ private slots:
 
         QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
         QVERIFY(editor);
-        QCOMPARE(editor->property("font").value<QFont>().pixelSize(), 20);
+        // The document opens at the size the panel beside it is drawn at.
+        QCOMPARE(editor->property("font").value<QFont>().pixelSize(), 12);
 
         // `omarchy display text size 16` sets the GNOME factor to 16/12.
         backend.setTextScale(16.0 / 12.0);
-        QCOMPARE(window->property("editorFontPixelSize").toInt(), 27);
-        QCOMPARE(editor->property("font").value<QFont>().pixelSize(), 27);
+        QCOMPARE(window->property("editorFontPixelSize").toInt(), 16);
+        QCOMPARE(editor->property("font").value<QFont>().pixelSize(), 16);
 
         backend.setTextScale(9.0 / 12.0);
-        QCOMPARE(window->property("editorFontPixelSize").toInt(), 15);
-        QCOMPARE(editor->property("font").value<QFont>().pixelSize(), 15);
+        QCOMPARE(window->property("editorFontPixelSize").toInt(), 9);
+        QCOMPARE(editor->property("font").value<QFont>().pixelSize(), 9);
     }
 
     void keepsTextColumnInsideNarrowWindows() {
@@ -3261,22 +3262,22 @@ private slots:
         window->requestActivate();
         QTRY_VERIFY(window->isActive());
 
-        QCOMPARE(backend.editorFontSize(), 20);
+        QCOMPARE(backend.editorFontSize(), 12);
         QTest::keyClick(window, Qt::Key_Equal, Qt::ControlModifier);
-        QCOMPARE(backend.editorFontSize(), 22);
+        QCOMPARE(backend.editorFontSize(), 14);
         QTest::keyClick(window, Qt::Key_Plus, Qt::ControlModifier);
-        QCOMPARE(backend.editorFontSize(), 24);
+        QCOMPARE(backend.editorFontSize(), 16);
         QTest::keyClick(window, Qt::Key_Minus, Qt::ControlModifier);
-        QCOMPARE(backend.editorFontSize(), 22);
+        QCOMPARE(backend.editorFontSize(), 14);
         QTest::keyClick(window, Qt::Key_0, Qt::ControlModifier);
-        QCOMPARE(backend.editorFontSize(), 20);
-        QCOMPARE(QSettings().value(QStringLiteral("editor/fontSize")).toInt(), 20);
+        QCOMPARE(backend.editorFontSize(), 12);
+        QCOMPARE(QSettings().value(QStringLiteral("editor/fontSize")).toInt(), 12);
     }
 
     void persistsEditorFontSizeAcrossBackendInstances() {
         {
             Backend backend;
-            QCOMPARE(backend.editorFontSize(), 20);
+            QCOMPARE(backend.editorFontSize(), 12);
 
             QSignalSpy changedSpy(&backend, &Backend::editorFontSizeChanged);
             backend.setEditorFontSize(28);

@@ -17,6 +17,7 @@ Item {
     property bool folderHasParent: false
     property var entries: []
     property url currentFileUrl
+    property string fontFamily: "iA Writer Mono S"
 
     // Sizes are kept at text scale 1 like every other dimension in the app,
     // so a dragged width survives a change of desktop text size.
@@ -203,7 +204,7 @@ Item {
             text: (root.folderHasParent ? "‹ " : "") + root.folderName
             color: headerArea.containsMouse ? root.textColor : root.mutedColor
             elide: Text.ElideMiddle
-            font.family: "iA Writer Mono S"
+            font.family: root.fontFamily
             font.pixelSize: Math.round(12 * root.textScale)
         }
 
@@ -240,7 +241,7 @@ Item {
             color: root.textColor
             selectionColor: root.selectionFill
             selectedTextColor: root.textColor
-            font.family: "iA Writer Mono S"
+            font.family: root.fontFamily
             font.pixelSize: Math.round(13 * root.textScale)
 
             Keys.onReturnPressed: function(event) {
@@ -281,7 +282,7 @@ Item {
         text: "Nothing here yet"
         color: root.mutedColor
         opacity: 0.7
-        font.family: "iA Writer Mono S"
+        font.family: root.fontFamily
         font.pixelSize: Math.round(13 * root.textScale)
     }
 
@@ -359,7 +360,7 @@ Item {
                 color: row.current ? root.accentColor
                                    : (row.modelData.isDir ? root.mutedColor : root.textColor)
                 elide: Text.ElideRight
-                font.family: "iA Writer Mono S"
+                font.family: root.fontFamily
                 font.pixelSize: Math.round(13 * root.textScale)
             }
 
