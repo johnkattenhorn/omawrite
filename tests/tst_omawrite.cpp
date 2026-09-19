@@ -460,6 +460,78 @@ private slots:
         QVERIFY(!pressReturn(QStringLiteral("just text"), 9));
     }
 
+    void wrapsProseToTheMeasure() {
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> editor(createListEditor(component));
+        QVERIFY2(editor, qPrintable(component.errorString()));
+
+        const auto wrap = [&](const QString &source, int from, int to, int columns) {
+            QVariant handled;
+            QMetaObject::invokeMethod(editor.data(), "wrap",
+                                      Q_RETURN_ARG(QVariant, handled),
+                                      Q_ARG(QVariant, source), Q_ARG(QVariant, from),
+                                      Q_ARG(QVariant, to), Q_ARG(QVariant, columns));
+            return handled.toBool();
+        };
+        const auto result = [&] { return editor->property("resultText").toString(); };
+        const auto longest = [&]() {
+            int width = 0;
+            const QStringList lines = editor->property("resultText").toString().split(QLatin1Char('\n'));
+            for (const QString &line : lines)
+                width = qMax(width, int(line.size()));
+            return width;
+        };
+
+        // A paragraph on one long line comes back on the measure, broken
+        // between words.
+        QVERIFY(wrap(QStringLiteral("one two three four five six seven eight nine ten"), 0, 0, 20));
+        QCOMPARE(result(), QStringLiteral("one two three four\nfive six seven eight\nnine ten"));
+        QVERIFY(longest() <= 20);
+
+        // A document wrapped somewhere else is reflowed rather than folded:
+        // the lines are joined first, so a file wrapped at 72 comes out at
+        // the measure asked for rather than at 72 with the overhang tucked
+        // underneath it.
+        QVERIFY(wrap(QStringLiteral("one two three\nfour five six seven\neight nine ten"), 0, 0, 20));
+        QCOMPARE(result(), QStringLiteral("one two three four\nfive six seven eight\nnine ten"));
+
+        // A list item hangs its continuation under its own text, and a quote
+        // carries its marker down.
+        QVERIFY(wrap(QStringLiteral("- alpha beta gamma delta epsilon"), 0, 0, 20));
+        QCOMPARE(result(), QStringLiteral("- alpha beta gamma\n  delta epsilon"));
+        QVERIFY(wrap(QStringLiteral("> alpha beta gamma delta epsilon"), 0, 0, 20));
+        QCOMPARE(result(), QStringLiteral("> alpha beta gamma\n> delta epsilon"));
+
+        // Structure keeps its own line breaks however long the line is: a
+        // heading split in two stops being a heading.
+        QVERIFY(!wrap(QStringLiteral("# A heading that runs well past the measure it is given"),
+                      0, 0, 20));
+        QVERIFY(!wrap(QStringLiteral("| a column | another column | a third column |"), 0, 0, 20));
+        QVERIFY(!wrap(QStringLiteral("```\nsome code that is far too wide for the measure\n```"),
+                      0, 0, 20));
+        QVERIFY(!wrap(QStringLiteral("---\ntitle: a front matter field that is much too long\n---\n"),
+                      0, 0, 20));
+
+        // A word longer than the measure goes on a line of its own rather
+        // than being cut in half: a broken URL is not a link any more.
+        QVERIFY(wrap(QStringLiteral("see https://example.com/a/very/long/path/indeed now"), 0, 0, 20));
+        QCOMPARE(result(), QStringLiteral("see\nhttps://example.com/a/very/long/path/indeed\nnow"));
+
+        // Markdown's two-space hard break belongs to the end of the line it
+        // was written on, and stays there.
+        QVERIFY(wrap(QStringLiteral("alpha beta gamma delta epsilon  "), 0, 0, 20));
+        QCOMPARE(result(), QStringLiteral("alpha beta gamma\ndelta epsilon  "));
+
+        // Nothing to do is said rather than done.
+        QVERIFY(!wrap(QStringLiteral("short enough\n\nso is this"), 0, 0, 20));
+
+        // A selection takes the selected lines and leaves the rest alone.
+        const QString mixed = QStringLiteral("keep this line as it is\n\none two three four five six");
+        QVERIFY(wrap(mixed, mixed.indexOf(QStringLiteral("one two")), mixed.size(), 10));
+        QCOMPARE(result(), QStringLiteral("keep this line as it is\n\none two\nthree four\nfive six"));
+    }
+
     void unwrapsHardWrappedLines() {
         QQmlEngine engine;
         QQmlComponent component(&engine);
@@ -4939,6 +5011,16 @@ private:
                     else
                         select(from, to);
                     return edit(EditorMutations.unwrapPlan(source, from, to), source, from);
+                }
+
+                function wrap(source, from, to, columns) {
+                    text = source;
+                    if (from === to)
+                        cursorPosition = from;
+                    else
+                        select(from, to);
+                    return edit(EditorMutations.wrapPlan(source, from, to, columns),
+                                source, from);
                 }
         )QML", QStringLiteral("ListHarness"));
     }

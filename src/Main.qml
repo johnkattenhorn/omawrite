@@ -79,6 +79,10 @@ ApplicationWindow {
         id: layoutSettings
         category: "layout"
         property int editorColumns: 0
+        // What Ctrl+J wraps to. 80 is the convention Markdown files are
+        // usually held to; it is not the same question as how wide the
+        // writing column is drawn.
+        property int wrapColumns: 80
     }
 
     // Copy on select, the way a terminal does it. Persisted, because someone
@@ -580,6 +584,15 @@ ApplicationWindow {
         onActivated: editor.unwrapWrappedLines()
     }
 
+    // The other direction, on the key beside it.
+    Shortcut {
+        objectName: "wrapShortcut"
+        sequence: "Ctrl+J"
+        context: Qt.WindowShortcut
+        enabled: !win.previewVisible
+        onActivated: editor.wrapToMeasure()
+    }
+
     Shortcut {
         objectName: "copyOnSelectShortcut"
         sequence: "Ctrl+Shift+C"
@@ -785,7 +798,7 @@ ApplicationWindow {
         x: Math.round((win.width - width) / 2)
         y: Math.round((win.height - height) / 2)
         contentItem: Label {
-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nAlt+G  Claude\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+Shift+J  Unwrap hard-wrapped lines\nCtrl+Shift+C  Copy on select on/off\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+/  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
+            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nAlt+G  Claude\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+J  Wrap at 80 columns\nCtrl+Shift+J  Unwrap hard-wrapped lines\nCtrl+Shift+C  Copy on select on/off\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+/  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
             lineHeight: 1.5
         }
     }
@@ -1418,6 +1431,32 @@ ApplicationWindow {
                 // column of lines. This joins each wrapped paragraph back onto
                 // one line: the selected ones, or the whole document when
                 // nothing is selected. One undo puts it back.
+                // Put the prose back on a measure: 80 columns by default,
+                // the selected lines or the whole document. Headings, tables,
+                // code and front matter keep their own line breaks, and one
+                // undo puts the lot back.
+                function wrapToMeasure() {
+                    forceActiveFocus();
+                    var plan = EditorMutations.wrapPlan(text, selectionStart, selectionEnd,
+                                                        layoutSettings.wrapColumns);
+                    if (!plan) {
+                        win.flashNotice("Already within "
+                                        + layoutSettings.wrapColumns + " columns");
+                        return;
+                    }
+                    backend.beginUndoBlock();
+                    try {
+                        applyPlan(plan);
+                    } finally {
+                        backend.endUndoBlock();
+                    }
+                    win.flashNotice(plan.wrappedLines === 1
+                                    ? "Wrapped at " + layoutSettings.wrapColumns
+                                      + ", 1 line added"
+                                    : "Wrapped at " + layoutSettings.wrapColumns + ", "
+                                      + plan.wrappedLines + " lines added");
+                }
+
                 function unwrapWrappedLines() {
                     forceActiveFocus();
                     var plan = EditorMutations.unwrapPlan(text, selectionStart, selectionEnd);

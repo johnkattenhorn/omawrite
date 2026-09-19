@@ -53,6 +53,12 @@ Written here:
   the way a terminal does it, with a line in the footer that fades. A
   `PointHandler` does the watching; `Ctrl+Shift+C` turns it off, persisted under
   the `editor` settings category.
+- **Wrap at 80 columns** (`Ctrl+J`) — the convention Markdown files are held
+  to, as the other half of the unwrap. It joins the paragraph before it fills
+  it, so a file wrapped at 72 comes out at 80 rather than at 72 with the
+  overhang tucked under; headings, tables, code, front matter and breaks keep
+  their own lines, and a word longer than the measure overhangs rather than
+  being cut. `wrapColumns` sets the measure.
 - **Unwrap hard-wrapped lines** (`Ctrl+Shift+J`) — pasted text wrapped at a
   column goes back to one line per paragraph, leaving every newline that means
   something: blank lines, list items, quotes, tables, headings, fences,

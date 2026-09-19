@@ -2,6 +2,30 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-19 — Wrapping reflows the paragraph rather than folding the line
+
+`Ctrl+Shift+J` took hard-wrapped prose back to one line per paragraph.
+`Ctrl+J` is the other direction, for the 80-column convention most Markdown
+files are held to.
+
+It joins before it fills. Folding each line where it stands would take a file
+wrapped at 72 and leave it at 72 with a few words tucked under each line; the
+measure is a property of the paragraph, not of whatever lines it happens to be
+on, so the unwrap runs first and the fill runs over its result. That also means
+one implementation decides what counts as a paragraph, and `Ctrl+J` then
+`Ctrl+Shift+J` returns the document it started from.
+
+A line whose breaks are its meaning is left alone however long it is: a
+heading, a table row, a thematic break, a reference definition, fenced and
+indented code, front matter. A heading folded in two stops being a heading, and
+a folded table row stops being a table. A word longer than the measure — a URL,
+mostly — takes a line of its own and overhangs, because a URL broken across two
+lines is not a link.
+
+`wrapColumns` is a separate setting from `editorColumns`. How wide the writing
+column is drawn and what the file is wrapped to are two questions, and a writer
+who wants a full-width column and an 80-column file should not have to choose.
+
 ## 2026-09-19 — A conversation belongs to a document, and outlives the window
 
 The panel started as one chat per window, held in memory. Two sittings with it

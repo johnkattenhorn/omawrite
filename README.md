@@ -103,6 +103,16 @@ window is closed while `--open` does not.
   is on the clipboard, the way a terminal does it, and the footer says how many
   characters for a moment. `Ctrl+Shift+C` turns it off and on, and it stays as
   you left it.
+- `Ctrl+J` wraps Markdown at 80 columns — the convention most Markdown files
+  are held to. It reflows rather than folds: lines already broken somewhere
+  else are joined first, so a file wrapped at 72 comes out at 80 instead of 72
+  with the overhang tucked underneath. Headings, tables, fenced and indented
+  code, front matter and thematic breaks keep their own line breaks, list
+  items hang their continuations, quotes carry their marker down, and a word
+  longer than the measure goes on a line of its own rather than being cut in
+  half. Set `wrapColumns` under `[layout]` for a different measure. With a
+  selection it takes the selected lines, without one the whole document, and
+  `Ctrl+Z` puts it back in a single step.
 - `Ctrl+Shift+J` unwraps hard-wrapped lines: text pasted out of a mail client or
   a file wrapped at 72 columns goes back to one line per paragraph. It leaves
   blank lines, list items, table rows, headings, fenced and indented code, front
