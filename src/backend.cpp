@@ -32,6 +32,7 @@
 #include <QTextBlock>
 #include <QTextBlockFormat>
 #include <QTextCursor>
+#include <QTextFragment>
 #include <QTextDocument>
 #include <QTextStream>
 #include <QUrl>
@@ -461,6 +462,9 @@ void Backend::setPreviewMarkdown(const QString &markdown) {
     m_previewDocument->setMarkdown(
         markdown, QTextDocument::MarkdownFeatures(QTextDocument::MarkdownDialectGitHub)
                       | QTextDocument::MarkdownNoHTML);
+    QFont editorFont = m_previewDocument->defaultFont();
+    editorFont.setPixelSize(qRound(m_editorFontSize * m_textScale));
+    applyPreviewTypography(m_previewDocument, editorFont);
 }
 
 void Backend::setPreviewWidth(int width) {
@@ -2018,6 +2022,45 @@ void Backend::adoptFillingMeasure() {
     // decision. Anything else is, and stays.
     if (settings.value(QStringLiteral("layout/editorColumns")).toInt() == 65)
         settings.setValue(QStringLiteral("layout/editorColumns"), 0);
+}
+
+void Backend::applyPreviewTypography(QTextDocument *document, const QFont &editorFont) {
+    if (!document)
+        return;
+
+    const qreal editorPixelSize = editorFont.pixelSize() > 0
+        ? editorFont.pixelSize()
+        : document->defaultFont().pixelSize();
+    if (editorPixelSize <= 0)
+        return;
+    const qreal bodyPointSize = editorPixelSize * 0.75;
+
+    QTextCursor cursor(document);
+    cursor.beginEditBlock();
+    for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+        const int heading = block.blockFormat().headingLevel();
+        for (auto it = block.begin(); it != block.end(); ++it) {
+            const QTextFragment fragment = it.fragment();
+            if (!fragment.isValid())
+                continue;
+            QTextCharFormat format = fragment.charFormat();
+            // Everything is written in one face here, prose and code alike,
+            // so code in the preview reads as the same text it is in the
+            // source rather than as Qt's fallback typewriter.
+            format.setFontFamilies({appFont()});
+            format.setFontFixedPitch(true);
+            format.setFontPointSize(heading > 0
+                ? MarkdownHighlighter::headingPointSize(editorPixelSize, heading)
+                : bodyPointSize);
+            if (heading > 0)
+                format.setFontWeight(QFont::Bold);
+            QTextCursor range(document);
+            range.setPosition(fragment.position());
+            range.setPosition(fragment.position() + fragment.length(), QTextCursor::KeepAnchor);
+            range.setCharFormat(format);
+        }
+    }
+    cursor.endEditBlock();
 }
 
 QString Backend::appFont() {

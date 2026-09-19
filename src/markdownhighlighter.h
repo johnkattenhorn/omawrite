@@ -14,6 +14,10 @@ public:
     void setColors(const QString &background, const QString &foreground, const QString &accent);
     void setSearch(const QString &query, int currentMatchStart);
     void setTextScale(qreal textScale);
+    // The size a heading is drawn at, in points, for a document being written
+    // at editorPixelSize. The preview asks the same question, so the answer
+    // lives in one place rather than drifting between the two views.
+    static qreal headingPointSize(qreal editorPixelSize, int level);
     void setFocusMode(bool enabled);
     void setFocusCursorPosition(int position);
 

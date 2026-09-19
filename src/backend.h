@@ -103,6 +103,11 @@ public:
     // own, as Omamail takes it, falling back to the bundled writing font on a
     // machine that does not have it.
     static QString appFont();
+    // Qt renders Markdown in its own sizes and its own fixed-pitch face, so
+    // the preview and the source view disagreed about how big a heading is
+    // and what code looks like. This puts the rendered document back on the
+    // sizes the editor draws, in the editor's own font.
+    static void applyPreviewTypography(QTextDocument *document, const QFont &editorFont);
     // The measure used to be fixed at 65 characters and is now the window's
     // own width. An install holding the old default follows the new one; a
     // measure somebody chose is left alone. Runs once per install.

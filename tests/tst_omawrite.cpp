@@ -5,6 +5,7 @@
 #include <QStandardPaths>
 #include <QQuickTextDocument>
 #include <QTextBlock>
+#include <QTextFragment>
 #include <QTextDocument>
 #include "buffersession.h"
 #include "workspacesession.h"
@@ -4359,6 +4360,60 @@ private slots:
         window->setProperty("sidebarOpen", false);
         window->setProperty("agentOpen", false);
         QTRY_COMPARE(window->property("editorWidth").toInt(), full);
+    }
+
+    void drawsThePreviewAtTheSizesTheEditorUses() {
+        QTextDocument rendered;
+        QFont editorFont(Backend::appFont());
+        editorFont.setPixelSize(12);
+        rendered.setDefaultFont(editorFont);
+        rendered.setMarkdown(QStringLiteral("# One\n\n## Two\n\nSome prose with `code` in it.\n\n"
+                                            "```\nfenced code\n```\n"),
+                             QTextDocument::MarkdownDialectGitHub);
+
+        // Qt renders Markdown at its own heading sizes, which is the thing
+        // being corrected: the preview has to agree with the source view.
+        Backend::applyPreviewTypography(&rendered, editorFont);
+
+        const auto sizeOfLine = [&rendered](const QString &text) {
+            for (QTextBlock block = rendered.begin(); block.isValid(); block = block.next()) {
+                if (!block.text().contains(text))
+                    continue;
+                for (auto it = block.begin(); it != block.end(); ++it) {
+                    if (it.fragment().isValid())
+                        return it.fragment().charFormat().fontPointSize();
+                }
+            }
+            return qreal(-1);
+        };
+        const auto familyOfLine = [&rendered](const QString &text) {
+            for (QTextBlock block = rendered.begin(); block.isValid(); block = block.next()) {
+                if (!block.text().contains(text))
+                    continue;
+                for (auto it = block.begin(); it != block.end(); ++it) {
+                    if (it.fragment().isValid())
+                        return it.fragment().charFormat().fontFamilies().toStringList().value(0);
+                }
+            }
+            return QString();
+        };
+
+        QCOMPARE(sizeOfLine(QStringLiteral("One")),
+                 MarkdownHighlighter::headingPointSize(12, 1));
+        QCOMPARE(sizeOfLine(QStringLiteral("Two")),
+                 MarkdownHighlighter::headingPointSize(12, 2));
+        // Body text is the editor's own size, in points rather than pixels.
+        QCOMPARE(sizeOfLine(QStringLiteral("Some prose")), qreal(9));
+
+        // Code is the same face as the prose around it, as it is in the
+        // source view, rather than Qt's fallback typewriter.
+        QCOMPARE(familyOfLine(QStringLiteral("fenced code")), Backend::appFont());
+        QCOMPARE(familyOfLine(QStringLiteral("Some prose")), Backend::appFont());
+        QCOMPARE(sizeOfLine(QStringLiteral("fenced code")), qreal(9));
+
+        // The heading ratios are the editor's, whatever size it is set to.
+        QCOMPARE(MarkdownHighlighter::headingPointSize(20, 1) / (20 * 0.75), qreal(2.3));
+        QCOMPARE(MarkdownHighlighter::headingPointSize(12, 6) / (12 * 0.75), qreal(1.3));
     }
 
     void copiesAnAnswerTheSameWayTheDocumentDoes() {

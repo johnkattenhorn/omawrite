@@ -89,7 +89,9 @@ window is closed while `--open` does not.
   folder, and puts the keyboard in it. Pressing it again takes the sidebar away
   and hands the keyboard back to the text — it never reaches into the panel
   while you are writing. It starts closed.
-- `Ctrl+Shift+P` toggles the Markdown preview.
+- `Ctrl+Shift+P` toggles the Markdown preview. It is drawn in the same font as
+  the source view, at the same size, with headings on the same ratios, so
+  switching between the two changes what is rendered and nothing else.
 - `Alt+G` opens the Claude panel on the right of the window, and closes it
   again. See [Claude beside the document](docs/AGENT.md).
 - `Ctrl+T` opens a tab, `Ctrl+W` closes the one in front, and `Ctrl+Tab` and

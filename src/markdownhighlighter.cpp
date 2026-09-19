@@ -40,6 +40,19 @@ void MarkdownHighlighter::setSearch(const QString &query, int currentMatchStart)
     rehighlight();
 }
 
+// Heading sizes are multiples of the size the document is actually being
+// written at, rather than of a size it used to default to: a heading that
+// ignores the editor's own font size is three times the body on a small one.
+// The multipliers are ratios of pixels and a char format takes points, so
+// 0.75 converts at Qt's logical 96 DPI -- without it every heading came out a
+// third larger than the ratio it was given.
+qreal MarkdownHighlighter::headingPointSize(qreal editorPixelSize, int level) {
+    // H1=2.3, H2=2.1, H3=1.9, H4=1.7, H5=1.5, H6=1.3
+    static const qreal multipliers[] = {2.3, 2.1, 1.9, 1.7, 1.5, 1.3};
+    const int index = qBound(1, level, 6) - 1;
+    return editorPixelSize * multipliers[index] * 0.75;
+}
+
 void MarkdownHighlighter::setTextScale(qreal textScale) {
     if (qFuzzyCompare(m_textScale, textScale))
         return;
@@ -136,16 +149,8 @@ void MarkdownHighlighter::rebuildFormats() {
     m_headingFormat.setForeground(text);
     m_headingFormat.setFontWeight(QFont::Bold);
 
-    // Heading sizes are multiples of the size the document is actually being
-    // written at, rather than of the size it used to default to: a heading
-    // that ignores the editor's own font size is three times the body on a
-    // small one. The multipliers are ratios of pixels and the format takes
-    // points, so 0.75 converts at Qt's logical 96 DPI -- without it every
-    // heading came out a third larger than the ratio it was given.
-    // H1=2.3, H2=2.1, H3=1.9, H4=1.7, H5=1.5, H6=1.3
-    static const qreal headingSizeMultipliers[] = {2.3, 2.1, 1.9, 1.7, 1.5, 1.3};
     for (int i = 0; i < 6; ++i)
-        m_headingSizes[i] = editorPixelSize * headingSizeMultipliers[i] * 0.75;
+        m_headingSizes[i] = headingPointSize(editorPixelSize, i + 1);
 
     m_boldFormat = QTextCharFormat();
     m_boldFormat.setFontWeight(QFont::Bold);

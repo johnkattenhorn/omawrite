@@ -2,6 +2,22 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-19 — The preview is the same text, rendered
+
+Qt renders Markdown at its own heading sizes and in its own fixed-pitch face,
+so `Ctrl+Shift+P` changed the typography as well as the rendering: headings
+jumped to a different scale and code came back in a fallback typewriter the
+source view never uses. Two views of one document that disagree about how big
+a heading is make the toggle feel like a different application.
+
+`Backend::applyPreviewTypography` walks the rendered document and puts every
+fragment back on the editor's own font, with headings at
+`MarkdownHighlighter::headingPointSize` -- the same function the highlighter
+uses, so the two cannot drift apart. Code takes the same face as the prose
+around it, which is what the source view shows: everything here is written in
+one monospace font, and a preview that switches face for a code span is
+inventing a distinction the document does not make.
+
 ## 2026-09-19 — Wrapping reflows the paragraph rather than folding the line
 
 `Ctrl+Shift+J` took hard-wrapped prose back to one line per paragraph.
