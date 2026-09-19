@@ -27,6 +27,10 @@ Item {
     // Omamail's own scale: body 12, the chrome a size behind it.
     readonly property int bodySize: Math.round(12 * root.textScale)
     readonly property int chromeSize: Math.round(11 * root.textScale)
+    // How far the input's own text sits inside its box. The status line above
+    // it is inset by the same amount, so the two read as one control rather
+    // than as a line that missed its box by a couple of pixels.
+    readonly property int composerInset: Math.round(8 * root.textScale)
 
     // Logical, like every other dimension here, so a dragged width survives a
     // change of desktop text size.
@@ -272,6 +276,7 @@ Item {
             Label {
                 objectName: "agentActivity"
                 anchors.left: parent.left
+                anchors.leftMargin: root.composerInset
                 anchors.verticalCenter: parent.verticalCenter
                 text: (root.activity.length > 0 ? root.activity : "Working")
                       + " " + root.elapsed + "s"
@@ -284,6 +289,7 @@ Item {
             Label {
                 objectName: "agentStop"
                 anchors.right: parent.right
+                anchors.rightMargin: root.composerInset
                 anchors.verticalCenter: parent.verticalCenter
                 text: "stop"
                 color: stopArea.containsMouse ? root.textColor : root.mutedColor
@@ -321,9 +327,17 @@ Item {
                 objectName: "agentInput"
                 anchors.fill: parent
                 anchors.margins: Math.round(6 * root.textScale)
-                anchors.leftMargin: Math.round(8 * root.textScale)
+                anchors.leftMargin: root.composerInset
+                anchors.rightMargin: root.composerInset
                 background: null
+                // The Material style sets its own horizontal padding, which
+                // `padding` alone does not clear: without these the caret
+                // starts 16px right of everything else in the composer.
                 padding: 0
+                leftPadding: 0
+                rightPadding: 0
+                topPadding: 0
+                bottomPadding: 0
                 enabled: root.available
                 wrapMode: TextArea.Wrap
                 placeholderText: root.running ? "Working..." : "Ask Claude"
