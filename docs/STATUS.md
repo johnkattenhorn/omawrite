@@ -10,13 +10,13 @@ drive.
 
 ## Where it is
 
-Branch `agent-panel`, 121 commits ahead of `origin/master` (upstream `8f98892`),
-off `custom`. 136 tests pass. Clean build, no warnings. Pushed to
+Branch `custom`, 125 commits ahead of `origin/master` (upstream `8f98892`),
+with `agent-panel` merged into it. 137 tests pass. Clean build, no warnings. Pushed to
 [johnkattenhorn/omawrite](https://github.com/johnkattenhorn/omawrite).
 
 ```sh
 ./bin/build    # build/omawrite
-./bin/test     # 136 passing
+./bin/test     # 137 passing
 ```
 
 ## What is in it
