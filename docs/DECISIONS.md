@@ -168,6 +168,18 @@ changed — to establish that neither the sandbox nor the inherited session was
 the cause. The mode is read from `agent/permissionMode`, so `bypassPermissions`
 is there for anyone who wants the shell as well.
 
+`acceptEdits` refuses every shell command, which made the brief's offer of
+`omawrite --read` a promise the turn could not keep, so `agent/allowedTools`
+carries an allow-list through to `--allowedTools` and ships defaulting to
+`Bash(omawrite:*)` — the editor's own command line and nothing else. A machine
+that wants its own tools names them; this one allows its skill CLIs and
+read-only git.
+
+The turn is told which permissions it has, because one that believes it can
+run anything answers "here is a patch, paste it in" when it could have made
+the edit, and reports a command it was never allowed to run as one that
+failed.
+
 Phase 1 is the panel, the stream and the folder. Insert-at-cursor and
 replace-selection from a finished answer come next, and a D-Bus write call after
 that, so an agent edit can arrive as one undoable buffer mutation rather than a

@@ -165,8 +165,10 @@ ends it.
 
 Each document keeps its own conversation, across tab switches and across
 restarts, until you clear it with **new**. It drives the `claude` command line
-non-interactively in `acceptEdits`, which means Claude edits files without
-asking and refuses anything that would otherwise need a prompt. [docs/AGENT.md](docs/AGENT.md)
+non-interactively in `acceptEdits`: Claude edits files without asking, and
+refuses anything that would otherwise need a prompt, since nothing headless can
+answer one. `allowedTools` under `[agent]` names the commands it may run
+anyway, and `permissionMode=bypassPermissions` lifts the question entirely. [docs/AGENT.md](docs/AGENT.md)
 covers what it is told, what it runs, how an edit it makes reaches the editor,
 and what has not been built yet.
 
