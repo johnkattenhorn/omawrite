@@ -10,6 +10,11 @@ jumped to a different scale and code came back in a fallback typewriter the
 source view never uses. Two views of one document that disagree about how big
 a heading is make the toggle feel like a different application.
 
+The line height was the same mistake at block level: the source view sets its
+lines 40% apart and the preview took Qt's single spacing, so the same words
+came back at a different rhythm. `Backend::lineHeightPercent` is the one
+number both views read.
+
 `Backend::applyPreviewTypography` walks the rendered document and puts every
 fragment back on the editor's own font, with headings at
 `MarkdownHighlighter::headingPointSize` -- the same function the highlighter

@@ -4411,6 +4411,16 @@ private slots:
         QCOMPARE(familyOfLine(QStringLiteral("Some prose")), Backend::appFont());
         QCOMPARE(sizeOfLine(QStringLiteral("fenced code")), qreal(9));
 
+        // And the lines sit as far apart as the source view's do: same words,
+        // same rhythm, so the toggle changes the rendering and nothing else.
+        for (QTextBlock block = rendered.begin(); block.isValid(); block = block.next()) {
+            if (block.text().isEmpty())
+                continue;
+            QCOMPARE(block.blockFormat().lineHeight(), Backend::lineHeightPercent());
+            QCOMPARE(block.blockFormat().lineHeightType(),
+                     int(QTextBlockFormat::ProportionalHeight));
+        }
+
         // The heading ratios are the editor's, whatever size it is set to.
         QCOMPARE(MarkdownHighlighter::headingPointSize(20, 1) / (20 * 0.75), qreal(2.3));
         QCOMPARE(MarkdownHighlighter::headingPointSize(12, 6) / (12 * 0.75), qreal(1.3));

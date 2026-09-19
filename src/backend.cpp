@@ -2024,6 +2024,10 @@ void Backend::adoptFillingMeasure() {
         settings.setValue(QStringLiteral("layout/editorColumns"), 0);
 }
 
+qreal Backend::lineHeightPercent() {
+    return typoraLineHeightPercent;
+}
+
 void Backend::applyPreviewTypography(QTextDocument *document, const QFont &editorFont) {
     if (!document)
         return;
@@ -2035,9 +2039,17 @@ void Backend::applyPreviewTypography(QTextDocument *document, const QFont &edito
         return;
     const qreal bodyPointSize = editorPixelSize * 0.75;
 
+    // The source view sets its lines 40% apart. A preview at Qt's default
+    // single spacing is the same words at a different rhythm, and the toggle
+    // reads as a change of document rather than of rendering.
+    QTextBlockFormat spacing;
+    spacing.setLineHeight(typoraLineHeightPercent, QTextBlockFormat::ProportionalHeight);
+
     QTextCursor cursor(document);
     cursor.beginEditBlock();
     for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+        QTextCursor blockCursor(block);
+        blockCursor.mergeBlockFormat(spacing);
         const int heading = block.blockFormat().headingLevel();
         for (auto it = block.begin(); it != block.end(); ++it) {
             const QTextFragment fragment = it.fragment();

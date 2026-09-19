@@ -108,6 +108,8 @@ public:
     // and what code looks like. This puts the rendered document back on the
     // sizes the editor draws, in the editor's own font.
     static void applyPreviewTypography(QTextDocument *document, const QFont &editorFont);
+    // The line height both views are set in, as a percentage.
+    static qreal lineHeightPercent();
     // The measure used to be fixed at 65 characters and is now the window's
     // own width. An install holding the old default follows the new one; a
     // measure somebody chose is left alone. Runs once per install.
