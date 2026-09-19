@@ -100,16 +100,25 @@ conflict, and the writer is the one who settles it.
 
 ## Permissions
 
-Claude runs with `--permission-mode dontAsk`. A child with no terminal cannot
-answer an approval prompt, and a turn waiting on one would never end.
+Claude runs with `--permission-mode acceptEdits`. A child with no terminal has
+nobody to ask, so the mode has to answer for you, and a mode that prompts hangs
+the turn rather than protecting it.
 
-What that means is worth saying plainly: inside the panel, Claude can write
-anything this user account can write, with nothing asking first. Your own
-settings and tool permissions still apply; the panel adds no sandbox of its own.
+What `acceptEdits` allows, plainly: Claude edits and writes files without
+asking, anywhere your account can write. What it refuses: anything that would
+otherwise need a prompt, which in practice means shell commands. Ask for
+something that needs one and the panel says so rather than doing it — including
+`omawrite --read`, which is a shell command like any other, so the brief's
+offer of the live buffer only holds in a mode that allows Bash.
+
+`dontAsk` sounds like the permissive one and is the opposite: it blocks Write
+and Bash both, leaving a panel that can read and talk but not edit. It is the
+right mode for Omamail, which never edits anything; it was the wrong one here,
+and reading the file is all the panel could do until this was corrected.
 
 The mode is read from the `agent/permissionMode` setting, so it can be changed
-without a rebuild — and a mode that prompts will hang the turn rather than
-protect it.
+without a rebuild. `bypassPermissions` allows the shell too, with everything
+that implies.
 
 `OMAWRITE_CLAUDE` names the command to run instead of `claude`, which is how
 the tests drive a synthetic stream.
@@ -121,4 +130,3 @@ the tests drive a synthetic stream.
   than a file change the watcher has to notice.
 - A queue for a second question asked while a turn is running. Today the panel
   ignores it.
-- Anything remembered between sessions. Each window starts with an empty panel.

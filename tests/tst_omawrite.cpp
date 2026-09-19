@@ -4529,10 +4529,12 @@ private slots:
         QVERIFY(arguments.contains(QStringLiteral("-p")));
         QVERIFY(arguments.contains(QStringLiteral("stream-json")));
         QVERIFY(arguments.contains(QStringLiteral("--include-partial-messages")));
-        // No approval prompt: a child with no terminal cannot answer one, and
-        // the turn would wait for it forever.
+        // The mode has to answer for the writer: a child with no terminal has
+        // nobody to ask, and a mode that asks would hang the turn. acceptEdits
+        // takes an edit to the document and refuses a shell command, which
+        // dontAsk refuses as well -- it blocks both.
         QVERIFY(arguments.contains(QStringLiteral("--permission-mode")));
-        QVERIFY(arguments.contains(QStringLiteral("dontAsk")));
+        QVERIFY(arguments.contains(QStringLiteral("acceptEdits")));
         // A first turn has no session to resume.
         QVERIFY(!arguments.contains(QStringLiteral("--resume")));
 

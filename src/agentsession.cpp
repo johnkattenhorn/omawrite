@@ -61,7 +61,7 @@ bool AgentSession::available() {
 
 QString AgentSession::permissionMode() {
     const QString mode = QSettings().value(permissionModeSetting).toString();
-    return mode.isEmpty() ? QStringLiteral("dontAsk") : mode;
+    return mode.isEmpty() ? QStringLiteral("acceptEdits") : mode;
 }
 
 QStringList AgentSession::arguments(const QString &resumeId, const QString &permissionMode) {
@@ -71,7 +71,7 @@ QStringList AgentSession::arguments(const QString &resumeId, const QString &perm
         QStringLiteral("--output-format"), QStringLiteral("stream-json"),
         QStringLiteral("--include-partial-messages"),
         QStringLiteral("--permission-mode"),
-        permissionMode.isEmpty() ? QStringLiteral("dontAsk") : permissionMode,
+        permissionMode.isEmpty() ? QStringLiteral("acceptEdits") : permissionMode,
     };
     // A fork rather than a plain resume: the panel can be asked to carry on
     // from a turn the writer has since branched away from, and two chats

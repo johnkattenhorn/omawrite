@@ -153,12 +153,20 @@ panel saves the buffer before it starts a turn. An edit Claude makes then lands
 in the editor without a dialog, and the prompt comes back only when the writer
 typed during the turn, which is a real conflict and worth being asked about.
 
-Permissions are `dontAsk`, as Omamail's are, because a headless child cannot
-ask: an approval prompt with nowhere to appear leaves the panel waiting
-forever. The consequence is stated rather than mitigated — inside the panel
-Claude writes anything this user can write, with no confirmation. The mode is
-read from `agent/permissionMode` so it can be narrowed without a rebuild, and
-narrowing it to a mode that prompts will hang a turn instead of protecting it.
+Permissions are `acceptEdits`. A headless child has nobody to ask, so the mode
+answers for the writer, and one that prompts hangs the turn instead of
+protecting it. Claude edits files without asking and refuses anything that
+would otherwise need a prompt, shell commands included.
+
+`dontAsk` was the first choice, copied from Omamail, and it was wrong here. The
+name reads as the permissive one; it blocks Write and Bash both, which is
+exactly right for a mail window that never edits anything and leaves a writing
+panel able to read and talk and nothing else. It took a screenshot of the panel
+answering "Can't write — Edit denied in this session. Here is the patch; paste
+it in" to see it, and three runs — sandbox off, environment scrubbed, mode
+changed — to establish that neither the sandbox nor the inherited session was
+the cause. The mode is read from `agent/permissionMode`, so `bypassPermissions`
+is there for anyone who wants the shell as well.
 
 Phase 1 is the panel, the stream and the folder. Insert-at-cursor and
 replace-selection from a finished answer come next, and a D-Bus write call after

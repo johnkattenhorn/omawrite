@@ -40,8 +40,9 @@ public:
     // Whether that program is on PATH at all. The panel says so rather than
     // failing a turn when it is not.
     static bool available();
-    // Non-interactive, streaming, and no approval prompt: a child with no
-    // terminal cannot answer one, and a turn waiting on it would never end.
+    // Non-interactive and streaming. The permission mode has to answer for
+    // the writer, because a child with no terminal has nobody to ask:
+    // acceptEdits takes the edits and refuses everything else.
     static QStringList arguments(const QString &resumeId, const QString &permissionMode);
     static QString permissionMode();
     // What the first turn of a chat is told: which document is in front of the
