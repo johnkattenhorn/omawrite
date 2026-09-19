@@ -77,7 +77,9 @@ Written here:
   drawn icons stay as the fallback for a machine with no Nerd Font. The window
   is drawn in the desktop's font at 12, document included, with the bundled
   iA Writer Mono S as the fallback; heading sizes follow the document's own
-  size rather than a hardcoded 20px.
+  size rather than a hardcoded 20px. The writing column fills the window and
+  narrows as the docks take their width, with a one-time move off the old
+  65-character default.
 - **Preview scroll sync** — the toggle used to drop the reader at the top.
 - **Link hover** — reworked from #8 onto #40's existing hover, rather than
   adding a third MouseArea over the editor.

@@ -4244,6 +4244,44 @@ private slots:
         QVERIFY2(shortcut, "nothing is bound to Ctrl+/");
     }
 
+    void givesTheWritingColumnWhateverTheDocksLeave() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                 new AgentSession(&engine));
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        // The measure fills the window rather than stopping at a fixed count
+        // of characters: most of the width is the document.
+        const qreal windowWidth = window->property("width").toReal();
+        const int full = window->property("editorWidth").toInt();
+        QVERIFY2(full > windowWidth * 0.75, "the writing column is not filling the window");
+
+        // Each dock takes its width out of the column rather than sliding
+        // over it, and both together take more than either alone.
+        window->setProperty("sidebarOpen", true);
+        QTRY_VERIFY(window->property("editorWidth").toInt() < full);
+        const int withSidebar = window->property("editorWidth").toInt();
+
+        window->setProperty("agentOpen", true);
+        QTRY_VERIFY(window->property("editorWidth").toInt() < withSidebar);
+        const int withBoth = window->property("editorWidth").toInt();
+        QCOMPARE(withBoth, full - window->property("dockedWidth").toInt());
+
+        window->setProperty("sidebarOpen", false);
+        window->setProperty("agentOpen", false);
+        QTRY_COMPARE(window->property("editorWidth").toInt(), full);
+    }
+
     void keepsTheAgentButtonAtTheTopRight() {
         const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
         QVERIFY(!mainQmlPath.isEmpty());

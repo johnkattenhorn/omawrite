@@ -71,13 +71,14 @@ ApplicationWindow {
     Material.accent: backend.themeAccent
     color: pageColor
 
-    // Editor measure in average character widths. 65, the default, is the
-    // measure Omawrite has always had; 0 lets the text fill the window instead,
-    // keeping ten characters of margin on either side.
+    // Editor measure in average character widths. 0, the default, lets the
+    // text fill the window with ten characters of margin on either side, so
+    // the column gives way as the sidebar and the panel take their width. A
+    // number fixes the measure instead: 65 is what Omawrite used to have.
     Settings {
         id: layoutSettings
         category: "layout"
-        property int editorColumns: 65
+        property int editorColumns: 0
     }
 
     // Copy on select, the way a terminal does it. Persisted, because someone

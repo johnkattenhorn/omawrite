@@ -167,10 +167,12 @@ A machine without it falls back to the bundled iA Writer Mono S. `Ctrl++` and
 
 ## Measure
 
-The writing column is 65 characters wide. To change it, set `editorColumns`
-under `[layout]` in `~/.config/Omawrite/Omawrite.conf` — any width from 20
-characters up, or `0` to let the text fill the window with ten characters of
-margin on either side.
+The writing column fills the window, keeping ten characters of margin on
+either side, and gives way as the sidebar and the Claude panel take their
+width. To fix it at a measure instead, set `editorColumns` under `[layout]` in
+`~/.config/Omacom/omawrite.conf` — any width from 20 characters up. 65 is what
+Omawrite used to be. An install still carrying that old default is moved to the
+filling measure once; a measure you chose yourself is left alone.
 
 ## Saving
 

@@ -2,6 +2,23 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-19 — The measure fills the window, and the docks take from it
+
+The column was 65 characters, which is a good measure for a page and the wrong
+one for a window with two docks in it: at 12px the text sat in the middle with
+the sidebar and the panel opening into space it was never using.
+
+It fills the width now, ten characters of margin either side, and
+`availableEditorWidth` already subtracted whatever the docks were taking — so
+opening either one narrows the column rather than sliding over it, and closing
+it gives the width back. `editorColumns` still fixes a measure for anyone who
+wants one.
+
+A stored 65 is moved to 0 once, behind a `layout/measureFills` flag, because 65
+was the default rather than a choice: an install that had never touched the
+setting would otherwise keep the old column for ever. Any other number is
+somebody's decision and is left where it is.
+
 ## 2026-09-19 — The chrome follows Omamail, down to the mix
 
 Omamail is the other Qt window in this desktop doing the same kind of work, so

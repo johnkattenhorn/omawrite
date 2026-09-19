@@ -103,6 +103,10 @@ public:
     // own, as Omamail takes it, falling back to the bundled writing font on a
     // machine that does not have it.
     static QString appFont();
+    // The measure used to be fixed at 65 characters and is now the window's
+    // own width. An install holding the old default follows the new one; a
+    // measure somebody chose is left alone. Runs once per install.
+    static void adoptFillingMeasure();
     // The text the editor holds this instant, which is what `omawrite --read`
     // answers with: the session copy is up to an autosave behind it.
     QString currentDocumentText() const;

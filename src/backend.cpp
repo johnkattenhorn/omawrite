@@ -258,6 +258,7 @@ Backend::Backend(WorkspaceSession *workspaceSession, const QString &windowId, QO
 }
 
 void Backend::initializeRuntime() {
+    adoptFillingMeasure();
     m_wordCountTimer.setSingleShot(true);
     m_wordCountTimer.setInterval(120);
     connect(&m_wordCountTimer, &QTimer::timeout, this, &Backend::refreshWordCount);
@@ -2005,6 +2006,18 @@ QDir Backend::defaultDirectory() const {
 
 QString Backend::currentDocumentText() const {
     return m_document ? m_document->toPlainText() : QString();
+}
+
+void Backend::adoptFillingMeasure() {
+    QSettings settings;
+    const QString migrated = QStringLiteral("layout/measureFills");
+    if (settings.value(migrated).toBool())
+        return;
+    settings.setValue(migrated, true);
+    // 65 was the old default, so a stored 65 is almost certainly nobody's
+    // decision. Anything else is, and stays.
+    if (settings.value(QStringLiteral("layout/editorColumns")).toInt() == 65)
+        settings.setValue(QStringLiteral("layout/editorColumns"), 0);
 }
 
 QString Backend::appFont() {
