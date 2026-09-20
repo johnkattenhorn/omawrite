@@ -1147,6 +1147,12 @@ QString Backend::clipboardUrl() const {
     return normalizedLinkUrl(mimeData->text());
 }
 
+void Backend::copyToClipboard(const QString &text) {
+    if (text.isEmpty())
+        return;
+    QGuiApplication::clipboard()->setText(text);
+}
+
 QString Backend::clipboardText() const {
     const QClipboard *clipboard = QGuiApplication::clipboard();
     if (!clipboard)

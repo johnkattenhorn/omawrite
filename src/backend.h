@@ -163,6 +163,7 @@ public:
     Q_INVOKABLE QString saveClipboardImage();
     Q_INVOKABLE QString clipboardUrl() const;
     Q_INVOKABLE QString clipboardText() const;
+    Q_INVOKABLE void copyToClipboard(const QString &text);
     // One edit for undo, however many the editor makes inside it. An unwrap
     // rewrites a whole document as a remove and an insert, and a Ctrl+Z that
     // landed between the two would show an empty page.

@@ -4426,6 +4426,63 @@ private slots:
         QCOMPARE(MarkdownHighlighter::headingPointSize(12, 6) / (12 * 0.75), qreal(1.3));
     }
 
+    void takesTheWholeConversationInOneGo() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        auto *agent = new AgentSession(tabState.path(), &engine);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"), agent);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        auto *panel = window->findChild<QQuickItem *>(QStringLiteral("agentPanel"));
+        QVERIFY(panel);
+
+        // Nothing said yet is said rather than quietly copying an empty
+        // string over whatever was on the clipboard.
+        QGuiApplication::clipboard()->setText(QStringLiteral("untouched"));
+        QMetaObject::invokeMethod(window.data(), "copyConversation");
+        QCOMPARE(QGuiApplication::clipboard()->text(), QStringLiteral("untouched"));
+        QTRY_COMPARE(panel->property("notice").toString(), QStringLiteral("Nothing to copy yet"));
+
+        agent->readStreamLine(R"({"type":"system","subtype":"init","session_id":"S1"})");
+        FakeClaude claude;
+        QVERIFY(claude.ok);
+        claude.setStream({
+            R"({"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Two notes."}}})",
+            R"({"type":"result","subtype":"success","is_error":false,"session_id":"S1","result":"Two notes."})",
+        });
+        agent->ask(QStringLiteral("read it back"), QUrl(), 0, QString(), QUrl());
+        QTRY_VERIFY(!agent->running());
+
+        // A drag cannot cross from one answer to the next -- each is its own
+        // field -- so the whole conversation goes in one action, labelled so
+        // it makes sense pasted into something else.
+        QMetaObject::invokeMethod(window.data(), "copyConversation");
+        const QString copied = QGuiApplication::clipboard()->text();
+        QCOMPARE(copied, QStringLiteral("You: read it back\n\nClaude: Two notes."));
+        QTRY_VERIFY(panel->property("notice").toString().contains(QStringLiteral("conversation")));
+
+        // And the key does the same as the word in the header.
+        QGuiApplication::clipboard()->setText(QStringLiteral("untouched"));
+        QObject *shortcut = nullptr;
+        for (QObject *candidate : window->findChildren<QObject *>()) {
+            if (candidate->objectName() == QLatin1String("copyConversationShortcut"))
+                shortcut = candidate;
+        }
+        QVERIFY(shortcut);
+        window->setProperty("agentOpen", true);
+        QMetaObject::invokeMethod(shortcut, "activated");
+        QTRY_COMPARE(QGuiApplication::clipboard()->text(), copied);
+    }
+
     void copiesAnAnswerTheSameWayTheDocumentDoes() {
         const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
         QVERIFY(!mainQmlPath.isEmpty());
@@ -4459,15 +4516,12 @@ private slots:
         QMetaObject::invokeMethod(shortcut, "activated");
         QTRY_COMPARE(panel->property("copyOnSelect").toBool(), true);
 
-        // A copy the panel makes says so in the footer, the way the
-        // document's does, so the two do not look like different features.
-        QGuiApplication::clipboard()->setText(QStringLiteral("something else"));
-        QMetaObject::invokeMethod(panel, "selectionCopied", Q_ARG(int, 12));
-        QTRY_COMPARE(window->property("notice").toString(),
+        // A copy made in the panel says so in the panel: the footer is at the
+        // far corner of the window from the hand that just did it.
+        QMetaObject::invokeMethod(panel, "flashNotice",
+                                  Q_ARG(QVariant, QStringLiteral("Copied 12 characters")));
+        QTRY_COMPARE(panel->property("notice").toString(),
                      QStringLiteral("Copied 12 characters"));
-        QMetaObject::invokeMethod(panel, "selectionCopied", Q_ARG(int, 1));
-        QTRY_COMPARE(window->property("notice").toString(),
-                     QStringLiteral("Copied 1 character"));
     }
 
     void keepsTheAgentButtonAtTheTopRight() {

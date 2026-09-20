@@ -139,6 +139,19 @@ ApplicationWindow {
     // Save before asking: the agent reads the file, and the file should be the
     // text on screen. It also leaves the buffer unmodified, which is what lets
     // an edit the agent makes reload without a prompt.
+    // The whole conversation on the clipboard, for taking to another window.
+    // Dragging a long one is hopeless: each answer is its own field, so a
+    // selection stops where the answer does.
+    function copyConversation() {
+        var text = agent.transcript();
+        if (text.length === 0) {
+            agentPanel.flashNotice("Nothing to copy yet");
+            return;
+        }
+        backend.copyToClipboard(text);
+        agentPanel.flashNotice("Copied the conversation, " + text.length + " characters");
+    }
+
     function askAgent(question) {
         backend.saveNow();
         agent.ask(question, backend.fileUrl, caretLine(), editor.selectedText,
@@ -627,6 +640,15 @@ ApplicationWindow {
         onActivated: backend.openDialog()
     }
 
+    // The whole conversation, without dragging for it.
+    Shortcut {
+        objectName: "copyConversationShortcut"
+        sequence: "Ctrl+Shift+A"
+        context: Qt.ApplicationShortcut
+        enabled: win.agentOpen
+        onActivated: win.copyConversation()
+    }
+
     // Alt+G, as Omamail's panel takes, so the two docks answer the same key.
     Shortcut {
         objectName: "agentShortcut"
@@ -798,7 +820,7 @@ ApplicationWindow {
         x: Math.round((win.width - width) / 2)
         y: Math.round((win.height - height) / 2)
         contentItem: Label {
-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nAlt+G  Claude\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+J  Wrap at 80 columns\nCtrl+Shift+J  Unwrap hard-wrapped lines\nCtrl+Shift+C  Copy on select on/off\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+/  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
+            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+E  Files\nAlt+G  Claude\nCtrl+Shift+A  Copy the conversation\nCtrl+T  New Tab\nCtrl+W  Close Tab\nCtrl+Tab  Next Tab\nCtrl+Shift+Tab  Previous Tab\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+Shift+X  Strikethrough\nCtrl+K  Link\nCtrl+L  Checkbox\nCtrl+J  Wrap at 80 columns\nCtrl+Shift+J  Unwrap hard-wrapped lines\nCtrl+Shift+C  Copy on select on/off\nCtrl+Click / Ctrl+Enter  Follow link or wikilink\nTab / Shift+Tab  Nest list item\nCtrl+Shift+P  Preview\nCtrl++ / Ctrl+-  Text size\nCtrl+0  Reset text size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+/  Shortcuts\n\nIn the sidebar: Up/Down or j/k move, Enter opens,\nBackspace or h goes up, a new file, A new folder,\nEsc returns to writing"
             lineHeight: 1.5
         }
     }
@@ -877,10 +899,9 @@ ApplicationWindow {
                                       - 420 - Math.round(fileSidebar.width / win.textScale))
 
         onAsked: function(question) { win.askAgent(question); }
-        onSelectionCopied: function(characters) {
-            win.flashNotice(characters === 1 ? "Copied 1 character"
-                                             : "Copied " + characters + " characters");
-        }
+        // The panel says so itself, in the panel; the footer would be at the
+        // far corner from the hand that just did it.
+        onCopyConversationRequested: win.copyConversation()
         onInterrupted: agent.interrupt()
         onNewChatRequested: agent.newChat()
         onWidthChangeRequested: function(width) { win.agentLogicalWidth = width; }

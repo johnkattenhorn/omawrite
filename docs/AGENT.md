@@ -86,8 +86,14 @@ that session has gone — cleared, expired, or left on another machine — the
 panel says so, drops it, and the next question starts a fresh one.
 
 Selecting an answer copies it on release, the same rule the document follows
-and the same `Ctrl+Shift+C` to turn it off. Each message is its own field, so a
-drag stops at the message it started in.
+and the same `Ctrl+Shift+C` to turn it off, with the panel saying so above the
+input rather than in the footer at the other end of the window.
+
+Each message is its own field, so a drag stops at the message it started in
+and `Ctrl+A` takes that message rather than the conversation. **copy** in the
+header, or `Ctrl+Shift+A` while the panel is open, takes the whole thing:
+every turn in order, labelled `You:` and `Claude:`, ready to paste into
+another window.
 
 **new** clears the conversation on screen and the kept copy with it. That is
 the one thing that means "do not bring this back".

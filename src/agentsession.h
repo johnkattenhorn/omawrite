@@ -89,6 +89,10 @@ public:
     // of working something out should not be how you lose it.
     Q_INVOKABLE void showDocument(const QUrl &documentUrl);
 
+    // The conversation as plain text, for taking somewhere else: roles
+    // labelled, turns separated, in the order they were said.
+    Q_INVOKABLE QString transcript() const;
+
     // One line of the CLI's output. Public so the parser can be tested without
     // a process behind it.
     void readStreamLine(const QByteArray &line);

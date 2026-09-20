@@ -574,6 +574,24 @@ void AgentSession::showDocument(const QUrl &documentUrl) {
     loadChat(path);
 }
 
+QString AgentSession::transcript() const {
+    QStringList turns;
+    for (const QVariant &value : m_messages) {
+        const QVariantMap message = value.toMap();
+        const QString role = message.value(QStringLiteral("role")).toString();
+        const QString text = message.value(QStringLiteral("text")).toString();
+        if (text.isEmpty())
+            continue;
+        QString label = QStringLiteral("Claude");
+        if (role == QLatin1String("you"))
+            label = QStringLiteral("You");
+        else if (role == QLatin1String("trouble"))
+            label = QStringLiteral("Omawrite");
+        turns << QStringLiteral("%1: %2").arg(label, text);
+    }
+    return turns.join(QStringLiteral("\n\n"));
+}
+
 void AgentSession::appendMessage(const QString &role, const QString &text) {
     QVariantMap message;
     message[QStringLiteral("role")] = role;

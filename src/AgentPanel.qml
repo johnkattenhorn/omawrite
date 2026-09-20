@@ -45,6 +45,8 @@ Item {
     signal asked(string question)
     // A selection the panel just copied, for the footer to say so.
     signal selectionCopied(int characters)
+    // Take the whole conversation, for pasting somewhere else.
+    signal copyConversationRequested()
     signal interrupted()
     signal newChatRequested()
     signal widthChangeRequested(int width)
@@ -70,6 +72,8 @@ Item {
         if (selected.length === 0)
             return;
         source.copy();
+        root.flashNotice(selected.length === 1 ? "Copied 1 character"
+                                               : "Copied " + selected.length + " characters");
         root.selectionCopied(selected.length);
     }
 
@@ -84,6 +88,21 @@ Item {
     // Seconds spent on the turn in front of you, because a silent panel and a
     // working one look the same otherwise.
     property int elapsed: 0
+
+    // What just happened in the panel, said in the panel. The footer is at
+    // the other end of the window and a copy made here is easy to miss there.
+    property string notice: ""
+
+    function flashNotice(text) {
+        notice = text;
+        noticeTimer.restart();
+    }
+
+    Timer {
+        id: noticeTimer
+        interval: 1800
+        onTriggered: root.notice = ""
+    }
 
     onRunningChanged: {
         elapsed = 0;
@@ -144,6 +163,26 @@ Item {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             spacing: 12
+
+            Label {
+                objectName: "agentCopyChat"
+                text: "copy"
+                color: copyChatArea.containsMouse ? root.textColor : root.mutedColor
+                opacity: root.messages.length > 0 ? 1 : 0.35
+                font.family: root.fontFamily
+                font.pixelSize: root.chromeSize
+
+                MouseArea {
+                    id: copyChatArea
+                    anchors.centerIn: parent
+                    width: parent.width + 12
+                    height: 24
+                    hoverEnabled: true
+                    enabled: root.messages.length > 0
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.copyConversationRequested()
+                }
+            }
 
             Label {
                 objectName: "agentNewChat"
@@ -297,14 +336,36 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            height: root.running ? Math.round(20 * root.textScale) : 0
-            visible: root.running
+            height: root.running || root.notice.length > 0
+                ? Math.round(20 * root.textScale) : 0
+            visible: root.running || root.notice.length > 0
+
+            // What just happened, in the panel's own corner, fading the way
+            // the footer's notice does.
+            Label {
+                objectName: "agentNotice"
+                anchors.left: parent.left
+                anchors.leftMargin: root.composerInset
+                anchors.verticalCenter: parent.verticalCenter
+                visible: !root.running && root.notice.length > 0
+                text: root.notice
+                color: root.mutedColor
+                opacity: root.notice.length > 0 ? 0.9 : 0
+                elide: Text.ElideRight
+                font.family: root.fontFamily
+                font.pixelSize: root.chromeSize
+
+                Behavior on opacity {
+                    NumberAnimation { duration: 180; easing.type: Easing.OutQuad }
+                }
+            }
 
             Label {
                 objectName: "agentActivity"
                 anchors.left: parent.left
                 anchors.leftMargin: root.composerInset
                 anchors.verticalCenter: parent.verticalCenter
+                visible: root.running
                 text: (root.activity.length > 0 ? root.activity : "Working")
                       + " " + root.elapsed + "s"
                 color: root.mutedColor
@@ -318,6 +379,7 @@ Item {
                 anchors.right: parent.right
                 anchors.rightMargin: root.composerInset
                 anchors.verticalCenter: parent.verticalCenter
+                visible: root.running
                 text: "stop"
                 color: stopArea.containsMouse ? root.textColor : root.mutedColor
                 font.family: root.fontFamily
