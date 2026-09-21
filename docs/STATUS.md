@@ -1,6 +1,6 @@
 # Status
 
-Last updated 2026-09-19.
+Last updated 2026-09-21.
 
 A fork of [omacom/omawrite](https://github.com/omacom/omawrite), the Markdown
 writing app Omarchy 4.0 ships. Upstream keeps it deliberately minimal. This fork
@@ -10,14 +10,16 @@ drive.
 
 ## Where it is
 
-Branch `custom`, 127 commits ahead of `origin/master` (upstream `8f98892`),
-with `agent-panel` merged into it. 137 tests pass. Clean build, no warnings.
+Branch `custom`, 133 commits ahead of `upstream/master` (`8f98892`).
+The `agent-panel` branch is merged into it and has been deleted. 140 tests,
+139 of which pass every run; `recentresOnlyWhenFocusModeMovesTheEditor` is
+flaky (`tests/tst_omawrite.cpp:3514`). Clean build, no warnings.
 Pushed to
 [johnkattenhorn/omawrite](https://github.com/johnkattenhorn/omawrite).
 
 ```sh
 ./bin/build    # build/omawrite
-./bin/test     # 137 passing
+./bin/test     # 140 tests
 ```
 
 ## What is in it

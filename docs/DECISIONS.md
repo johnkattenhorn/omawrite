@@ -2,6 +2,27 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-21 — `origin` is this fork, `upstream` is omacom
+
+The remotes were named the other way round: `origin` pointed at
+`omacom/omawrite` and `fork` at ours. That inverts what every other repo here
+means by `origin`, and it is not a cosmetic difference. A branch tracking
+`origin/master` read as though it tracked our own master when it tracked
+upstream's.
+
+`upstream-image-paste`, the head of open pull request #69, was tracking
+`origin/master` under the old names — upstream's master, not its own branch on
+the fork. `git status` measured it "ahead 1" against the wrong base, and a bare
+`git pull` there would have merged omacom's master into the pull request branch
+without asking. A bare `git push` aimed at `omacom/master`, which only failed
+because we hold `pull` and not `push` on that repo. Permissions were doing the
+work a correct remote should have been doing.
+
+Renamed `origin` to `upstream` and `fork` to `origin`, and repointed
+`upstream-image-paste` at `origin/upstream-image-paste`. `master` still tracks
+`upstream/master` on purpose: it is a mirror of upstream, and pulling it should
+bring upstream's commits.
+
 ## 2026-09-19 — The preview is the same text, rendered
 
 Qt renders Markdown at its own heading sizes and in its own fixed-pitch face,
