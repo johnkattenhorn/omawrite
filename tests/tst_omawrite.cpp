@@ -2913,6 +2913,35 @@ private slots:
         QCOMPARE(session.windows().size(), 2);
     }
 
+    // A start that turns out to be the second one hands its launch to the
+    // Omawrite already running and goes. Its windows go with it, records and
+    // all: a record left behind is a window nothing is showing, which is what
+    // swallowed an open.
+    void windowManagerAbandonsTheWindowsItBuilt() {
+        QTemporaryDir stateDirectory;
+        QVERIFY(stateDirectory.isValid());
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        WorkspaceSession session(stateDirectory.path());
+        QQmlEngine engine;
+        WindowManager manager(&session, &engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY(manager.createWindow());
+        QVERIFY(manager.createWindow());
+        QCOMPARE(manager.windowCount(), 2);
+        QCOMPARE(session.windows().size(), 2);
+
+        manager.abandonWindows();
+
+        QCOMPARE(manager.windowCount(), 0);
+        QVERIFY(session.windows().isEmpty());
+
+        // And the session file says so too, so the next start reads none.
+        WorkspaceSession reread(stateDirectory.path());
+        reread.restore();
+        QVERIFY(reread.windows().isEmpty());
+    }
+
     void windowManagerClosesTheLastTabWithItsWindow() {
         QTemporaryDir stateDirectory;
         QVERIFY(stateDirectory.isValid());

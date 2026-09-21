@@ -2,6 +2,29 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-21 — A bare launch goes to the Omawrite already running
+
+`main.cpp` handed a launch to the running instance only when it named a file
+(`Cli::Request::Open`). A launch with no file — a launcher entry, which is how
+Omawrite is usually started — skipped that entirely and started a second
+process. Both then restored the same window records and shared one
+`session.json`, each overwriting the other's view of it. That is the suspected
+source of the orphaned window records that used to swallow an open.
+
+`Remote` gained a `Present` call: bring a window forward without changing what
+is in it. A bare launch now asks for that first, and a process whose request was
+taken has nothing left to do, so it exits. Opening Omawrite when it is already
+open raises it rather than adding a second copy.
+
+`Remote::claim` was called for its side effect and its answer dropped. Losing
+the name means another Omawrite finished starting while this one was building
+its windows, and the loser now hands its launch over and goes. It gives up its
+windows through `WindowManager::abandonWindows`, which takes their records out
+of the session with them — a record left behind is a window nothing is showing,
+which is the state that swallowed an open. The handover is attempted before the
+windows are given up, so a process that finds nobody to hand to still has
+something to show.
+
 ## 2026-09-21 — An open that cannot be handed on is opened here
 
 Picking a second file in the sidebar could leave the first one on screen. The

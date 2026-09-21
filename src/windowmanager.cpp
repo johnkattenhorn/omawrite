@@ -150,6 +150,19 @@ void WindowManager::setTextScale(qreal textScale) {
         window.backend->setTextScale(textScale);
 }
 
+void WindowManager::abandonWindows() {
+    const QList<WritingWindow> windows = m_windows;
+    m_windows.clear();
+    for (const WritingWindow &window : windows) {
+        m_workspaceSession->removeWindow(window.id);
+        delete window.root;
+        delete window.context;
+        delete window.backend;
+    }
+    m_workspaceSession->saveNow();
+    syncFileWatcher();
+}
+
 bool WindowManager::activateTab(const QString &tabId) {
     const QString windowId = m_workspaceSession->windowIdForTab(tabId);
     for (const WritingWindow &window : m_windows) {

@@ -19,6 +19,17 @@
 #include "windowmanager.h"
 #include "workspacesession.h"
 
+// Whether the Omawrite already on the bus took this launch. Both answers are
+// final: taken means this process has nothing left to do, and not taken means
+// there is nobody to take it and this process is the one that opens.
+static bool startupHandedOver(const Cli::Request &request) {
+    if (request.kind == Cli::Request::Open) {
+        const QString absolute = QFileInfo(request.path).absoluteFilePath();
+        return Remote::requestOpen(absolute, request.line, request.newTab);
+    }
+    return request.kind == Cli::Request::Run && Remote::requestPresent();
+}
+
 int main(int argc, char *argv[]) {
     const Cli::Request request = Cli::parse(argc, argv);
     // Answered before Qt claims the terminal, so these work over ssh and in a
@@ -57,14 +68,17 @@ int main(int argc, char *argv[]) {
     if (request.kind == Cli::Request::Select)
         return Cli::selectTab(request.path);
 
-    // An Omawrite already on this bus takes the file; a tabbed editor asked to
-    // show something five times should end with five tabs at most, never five
-    // windows. Nobody there means this process is the one that opens.
-    if (request.kind == Cli::Request::Open) {
-        const QString absolute = QFileInfo(request.path).absoluteFilePath();
-        if (Remote::requestOpen(absolute, request.line, request.newTab))
-            return 0;
-    }
+    // An Omawrite already on this bus takes the request; a tabbed editor asked
+    // to show something five times should end with five tabs at most, never
+    // five windows. Nobody there means this process is the one that opens.
+    //
+    // A launch with no file to show asks for Omawrite, and the Omawrite already
+    // running is Omawrite: it comes forward rather than being joined by a
+    // second copy of itself. Two processes sharing one session file was how a
+    // window record outlived the window, and an open handed to a window nobody
+    // was showing went missing.
+    if (startupHandedOver(request))
+        return 0;
 
     QQuickStyle::setStyle(QStringLiteral("Material"));
 
@@ -114,7 +128,18 @@ int main(int argc, char *argv[]) {
 
     // Claimed once there is a window to hand a file to, so an --open racing
     // this start is answered by a window rather than by an empty process.
-    Remote::claim(&windows);
+    //
+    // Losing the name means another Omawrite finished starting while this one
+    // was building its windows. It is the one that answers from here, so hand
+    // this launch to it and go, rather than staying up as a second process
+    // writing the same session file.
+    // The handover comes first and the windows go only once it has been taken:
+    // a process that gave them up and then found nobody to hand to would be
+    // left with nothing to show.
+    if (!Remote::claim(&windows) && Remote::isRunning() && startupHandedOver(request)) {
+        windows.abandonWindows();
+        return 0;
+    }
 
     if (!request.path.isEmpty() && !windows.primaryBackend()->modified()) {
         windows.primaryBackend()->openAtLine(

@@ -28,6 +28,12 @@ public:
     // answered, which is the caller's signal to open a window itself.
     static bool requestOpen(const QString &path, int line, bool newTab);
 
+    // Ask the Omawrite that owns the name to come forward. This is what a bare
+    // launch wants: a launcher asked for Omawrite, and the one already running
+    // is Omawrite. False when nobody answered, and this process is the one that
+    // opens.
+    static bool requestPresent();
+
     // Whether an Omawrite holds the name on this session bus at all, which is
     // a different answer from one that is there and would not say.
     static bool isRunning();
@@ -60,6 +66,9 @@ public slots:
 
     // Bring the tab `target` names forward, and its window with it.
     bool SelectTab(const QString &target);
+
+    // Bring a window forward without changing what is in it.
+    bool Present();
 
 private:
     // The tab a target names, as the window holding it and the tab's id.

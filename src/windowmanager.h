@@ -29,6 +29,12 @@ public:
     void setDarkMode(bool darkMode);
     void setTextScale(qreal textScale);
 
+    // Give up every window this process built and take its records out of the
+    // session with them. This is for a start that turns out to be the second
+    // one: leaving the records behind would leave a window nothing is showing,
+    // which is what swallowed an open before.
+    void abandonWindows();
+
 private:
     struct WritingWindow {
         QString id;

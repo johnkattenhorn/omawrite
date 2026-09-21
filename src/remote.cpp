@@ -109,6 +109,37 @@ bool Remote::requestSelect(const QString &target) {
     return reply.isValid() && reply.value();
 }
 
+bool Remote::requestPresent() {
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    if (!bus.isConnected())
+        return false;
+
+    QDBusInterface omawrite = runningOmawrite();
+    if (!omawrite.isValid())
+        return false;
+
+    const QDBusReply<bool> reply = omawrite.call(QStringLiteral("Present"));
+    return reply.isValid() && reply.value();
+}
+
+bool Remote::Present() {
+    if (!m_windows)
+        return false;
+
+    Backend *backend = m_windows->primaryBackend();
+    if (!backend)
+        return false;
+
+    QWindow *window = backend->parentWindow();
+    if (!window)
+        return false;
+
+    window->show();
+    window->raise();
+    window->requestActivate();
+    return true;
+}
+
 bool Remote::OpenFile(const QString &path, int line, bool newTab) {
     if (!m_windows)
         return false;

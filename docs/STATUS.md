@@ -11,7 +11,7 @@ drive.
 ## Where it is
 
 Branch `custom`, 133 commits ahead of `upstream/master` (`8f98892`).
-The `agent-panel` branch is merged into it and has been deleted. 142 tests
+The `agent-panel` branch is merged into it and has been deleted. 143 tests
 pass; `recentresOnlyWhenFocusModeMovesTheEditor`
 (`tests/tst_omawrite.cpp:3514`) is flaky and has failed one run in five. Clean
 build, no warnings.
@@ -20,7 +20,7 @@ Pushed to
 
 ```sh
 ./bin/build    # build/omawrite
-./bin/test     # 142 tests
+./bin/test     # 143 tests
 ```
 
 ## What is in it
@@ -108,12 +108,6 @@ Written here:
 
 ## Known
 
-- A bare launch starts a second process rather than handing the request to the
-  one already running: `main.cpp` short-circuits only a launch that names a
-  file, and `Remote::claim` runs after the windows are built, with its answer
-  discarded. Two processes then share one `session.json`. This is the suspected
-  source of the orphaned window records that used to swallow an open, and it is
-  not fixed.
 - `recentresOnlyWhenFocusModeMovesTheEditor` is flaky.
 - A tab's full text is cached in `session.json`, so a large document makes a
   large session file: a 522KB `STATUS.md` gave a 533KB session.
