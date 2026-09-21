@@ -38,6 +38,17 @@ struct Request {
 // is all digits, so a file whose name holds a colon still opens.
 Request parseTarget(Request::Kind kind, const QString &argument, bool newTab = false);
 
+// What the Omawrite already running should be asked to do with this launch.
+// Keyed on whether a file was named rather than on the kind: `omawrite FILE` is
+// Run with a path, which is what a desktop entry's `Exec=omawrite %f` sends, and
+// it has to open that file rather than merely raise the window.
+enum class Handover {
+    None,     // Nothing to hand over; this process answers the launch itself.
+    Open,     // Show this file in the window already up.
+    Present,  // Bring that window forward, leaving what is in it alone.
+};
+Handover handoverFor(const Request &request);
+
 Request parse(const QStringList &arguments);
 Request parse(int argc, char *argv[]);
 

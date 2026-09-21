@@ -66,6 +66,15 @@ QString Cli::usage() {
         "and https://github.com/omacom-io/omawrite#shortcuts has the same list.\n");
 }
 
+Cli::Handover Cli::handoverFor(const Request &request) {
+    // Append is answered before a window is built and never reaches here.
+    if (request.kind != Request::Run && request.kind != Request::Open)
+        return Handover::None;
+    if (!request.path.isEmpty())
+        return Handover::Open;
+    return request.kind == Request::Run ? Handover::Present : Handover::None;
+}
+
 Cli::Request Cli::parseTarget(Request::Kind kind, const QString &argument, bool newTab) {
     Request request;
     request.kind = kind;

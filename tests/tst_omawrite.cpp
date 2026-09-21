@@ -3924,6 +3924,39 @@ private slots:
         untouched.close();
     }
 
+    // What the Omawrite already running is asked to do with a launch. Keying
+    // this on the kind rather than on the file dropped the file: `omawrite
+    // FILE` is Run with a path, not Open, and that is what a desktop entry's
+    // `Exec=omawrite %f` sends -- so a click in a file manager raised the
+    // window and left the document alone.
+    void handsOverAFileHoweverItWasNamed() {
+        const auto handover = [](const QStringList &words) {
+            return Cli::handoverFor(Cli::parse(words));
+        };
+        const QStringList omawrite{QStringLiteral("omawrite")};
+
+        // What a file manager sends.
+        QCOMPARE(handover(omawrite + QStringList{QStringLiteral("draft.md")}),
+                 Cli::Handover::Open);
+        // And what --open sends, which took this path all along.
+        QCOMPARE(handover(omawrite + QStringList{QStringLiteral("--open"),
+                                                 QStringLiteral("draft.md")}),
+                 Cli::Handover::Open);
+        QCOMPARE(handover(omawrite + QStringList{QStringLiteral("--open"),
+                                                 QStringLiteral("draft.md:12")}),
+                 Cli::Handover::Open);
+
+        // A launcher entry with nothing named asks for Omawrite, and the one
+        // already running is Omawrite.
+        QCOMPARE(handover(omawrite), Cli::Handover::Present);
+
+        // The reading calls are answered before a window is built.
+        QCOMPARE(handover(omawrite + QStringList{QStringLiteral("--tabs")}),
+                 Cli::Handover::None);
+        QCOMPARE(handover(omawrite + QStringList{QStringLiteral("--help")}),
+                 Cli::Handover::None);
+    }
+
     void parsesTheCommandLine() {
         using Request = Cli::Request;
         const auto parse = [](const QStringList &words) { return Cli::parse(words); };

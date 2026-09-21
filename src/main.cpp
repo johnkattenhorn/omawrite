@@ -23,11 +23,16 @@
 // final: taken means this process has nothing left to do, and not taken means
 // there is nobody to take it and this process is the one that opens.
 static bool startupHandedOver(const Cli::Request &request) {
-    if (request.kind == Cli::Request::Open) {
-        const QString absolute = QFileInfo(request.path).absoluteFilePath();
-        return Remote::requestOpen(absolute, request.line, request.newTab);
+    switch (Cli::handoverFor(request)) {
+    case Cli::Handover::Open:
+        return Remote::requestOpen(QFileInfo(request.path).absoluteFilePath(),
+                                   request.line, request.newTab);
+    case Cli::Handover::Present:
+        return Remote::requestPresent();
+    case Cli::Handover::None:
+        return false;
     }
-    return request.kind == Cli::Request::Run && Remote::requestPresent();
+    return false;
 }
 
 int main(int argc, char *argv[]) {

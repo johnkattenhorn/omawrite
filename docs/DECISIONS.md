@@ -2,6 +2,22 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-21 — The handover is keyed on the file, not on the kind
+
+Sending a bare launch to the running Omawrite was keyed on `Request::Kind`, and
+that was the wrong key. `omawrite FILE` parses as `Run` with a path, not `Open`
+— `Open` is only what `--open` produces. A desktop entry's `Exec=omawrite %f`
+sends the first form, so every file opened from a file manager took the
+"nothing was named" branch: the window came forward and the file was dropped.
+Clicking a second file looked exactly like the switching bug fixed earlier that
+morning, which is the worst way for a regression to present.
+
+`Cli::handoverFor` now decides, and it asks whether a file was named rather than
+how it was named. It lives in `Cli` rather than as a static in `main.cpp` so a
+test can reach it; the decision had no coverage before, which is why the
+regression shipped. `Append` is answered before a window is built and never
+reaches it.
+
 ## 2026-09-21 — The panel's input scrolls under the caret
 
 `inputBox` stops growing at `160 * textScale`, and the `TextArea` filled it with
