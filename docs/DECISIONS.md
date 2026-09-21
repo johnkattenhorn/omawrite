@@ -2,6 +2,18 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-21 — The panel's input scrolls under the caret
+
+`inputBox` stops growing at `160 * textScale`, and the `TextArea` filled it with
+nothing behind it that could scroll. A question longer than the cap ran on below
+the border: the caret left the box and you could no longer see what you were
+typing.
+
+The `TextArea` is now `TextArea.flickable` inside a `Flickable`, which is what
+makes Qt keep the caret in view — a `TextArea` that merely fills a clipped box
+has nothing to scroll. The scrollbar is the `AsNeeded` one the history list
+already uses, so the composer and the conversation behave the same way.
+
 ## 2026-09-21 — A bare launch goes to the Omawrite already running
 
 `main.cpp` handed a launch to the running instance only when it named a file

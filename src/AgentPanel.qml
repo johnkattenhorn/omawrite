@@ -411,54 +411,67 @@ Item {
             border.color: root.mutedColor
             opacity: input.activeFocus ? 0.85 : 0.5
 
-            TextArea {
-                id: input
-                objectName: "agentInput"
+            // The box stops growing at its cap, so past that the writing has to
+            // move under the caret: without a flickable behind it the text ran
+            // on below the border and you lost sight of what you were typing.
+            // TextArea.flickable is what keeps the caret in view -- a plain
+            // TextArea filling the box has nothing to scroll.
+            Flickable {
+                id: inputFlick
+                objectName: "agentInputScroll"
                 anchors.fill: parent
                 anchors.margins: Math.round(6 * root.textScale)
                 anchors.leftMargin: root.composerInset
                 anchors.rightMargin: root.composerInset
-                background: null
-                // The Material style sets its own horizontal padding, which
-                // `padding` alone does not clear: without these the caret
-                // starts 16px right of everything else in the composer.
-                padding: 0
-                leftPadding: 0
-                rightPadding: 0
-                topPadding: 0
-                bottomPadding: 0
-                enabled: root.available
-                wrapMode: TextArea.Wrap
-                placeholderText: root.running ? "Working..." : "Ask Claude"
-                placeholderTextColor: root.mutedColor
-                color: root.textColor
-                selectionColor: root.selectionFill
-                selectedTextColor: root.textColor
-                font.family: root.fontFamily
-                font.pixelSize: root.bodySize
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-                PointHandler {
-                    objectName: "agentInputSelectionCopier"
-                    enabled: root.copyOnSelect
-                    acceptedButtons: Qt.LeftButton
-                    onActiveChanged: if (!active) root.copySelectionOnRelease(input)
-                }
+                TextArea.flickable: TextArea {
+                    id: input
+                    objectName: "agentInput"
+                    background: null
+                    // The Material style sets its own horizontal padding, which
+                    // `padding` alone does not clear: without these the caret
+                    // starts 16px right of everything else in the composer.
+                    padding: 0
+                    leftPadding: 0
+                    rightPadding: 0
+                    topPadding: 0
+                    bottomPadding: 0
+                    enabled: root.available
+                    wrapMode: TextArea.Wrap
+                    placeholderText: root.running ? "Working..." : "Ask Claude"
+                    placeholderTextColor: root.mutedColor
+                    color: root.textColor
+                    selectionColor: root.selectionFill
+                    selectedTextColor: root.textColor
+                    font.family: root.fontFamily
+                    font.pixelSize: root.bodySize
 
-                // Enter sends and Shift+Enter is a newline, the way every other
-                // message box works. Escape stops a turn if one is running, and
-                // otherwise hands the writing back.
-                Keys.onPressed: function(event) {
-                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                        if (event.modifiers & Qt.ShiftModifier)
-                            return;
-                        root.submit();
-                        event.accepted = true;
-                    } else if (event.key === Qt.Key_Escape) {
-                        if (root.running)
-                            root.interrupted();
-                        else
-                            root.dismissed();
-                        event.accepted = true;
+                    PointHandler {
+                        objectName: "agentInputSelectionCopier"
+                        enabled: root.copyOnSelect
+                        acceptedButtons: Qt.LeftButton
+                        onActiveChanged: if (!active) root.copySelectionOnRelease(input)
+                    }
+
+                    // Enter sends and Shift+Enter is a newline, the way every other
+                    // message box works. Escape stops a turn if one is running, and
+                    // otherwise hands the writing back.
+                    Keys.onPressed: function(event) {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                            if (event.modifiers & Qt.ShiftModifier)
+                                return;
+                            root.submit();
+                            event.accepted = true;
+                        } else if (event.key === Qt.Key_Escape) {
+                            if (root.running)
+                                root.interrupted();
+                            else
+                                root.dismissed();
+                            event.accepted = true;
+                        }
                     }
                 }
             }

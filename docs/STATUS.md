@@ -11,7 +11,7 @@ drive.
 ## Where it is
 
 Branch `custom`, 133 commits ahead of `upstream/master` (`8f98892`).
-The `agent-panel` branch is merged into it and has been deleted. 143 tests
+The `agent-panel` branch is merged into it and has been deleted. 144 tests
 pass; `recentresOnlyWhenFocusModeMovesTheEditor`
 (`tests/tst_omawrite.cpp:3514`) is flaky and has failed one run in five. Clean
 build, no warnings.
@@ -20,7 +20,7 @@ Pushed to
 
 ```sh
 ./bin/build    # build/omawrite
-./bin/test     # 143 tests
+./bin/test     # 144 tests
 ```
 
 ## What is in it

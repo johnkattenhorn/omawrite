@@ -5092,6 +5092,58 @@ private slots:
         QCOMPARE(window->property("dockedWidth").toInt(), int(panel->width()));
     }
 
+    // The input box stops growing at its cap. Past that the writing has to move
+    // under the caret, or a long question runs on below the border and you lose
+    // sight of what you are typing.
+    void keepsTheCaretInSightInALongQuestion() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir tabState;
+        QVERIFY(tabState.isValid());
+        Backend backend(tabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                 new AgentSession(&engine));
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        window->setProperty("agentOpen", true);
+        auto *panel = window->findChild<QQuickItem *>(QStringLiteral("agentPanel"));
+        QVERIFY(panel);
+        QTRY_VERIFY(panel->width() > 0);
+
+        auto *input = window->findChild<QQuickItem *>(QStringLiteral("agentInput"));
+        QVERIFY(input);
+        QVERIFY(QMetaObject::invokeMethod(input, "forceActiveFocus"));
+
+        // Enough lines to take the text well past the box's cap.
+        QString question;
+        for (int line = 0; line < 40; ++line)
+            question += QStringLiteral("line %1 of a long question\n").arg(line);
+        input->setProperty("text", question);
+        input->setProperty("cursorPosition", question.size());
+
+        // Something has to scroll the writing under the caret; a plain TextArea
+        // filling the box has nothing that can.
+        auto *scroll = window->findChild<QQuickItem *>(QStringLiteral("agentInputScroll"));
+        QVERIFY2(scroll, "the input has no flickable behind it");
+
+        // The box is capped, so the question is taller than the band it shows.
+        QTRY_VERIFY(scroll->property("contentHeight").toReal() > scroll->height());
+
+        // And the caret is inside that band rather than below it.
+        const qreal top = scroll->property("contentY").toReal();
+        const QRectF caret = input->property("cursorRectangle").toRectF();
+        QVERIFY2(caret.top() >= top - 1.0 && caret.bottom() <= top + scroll->height() + 1.0,
+                 qPrintable(QStringLiteral("caret %1..%2, band %3..%4")
+                                .arg(caret.top()).arg(caret.bottom())
+                                .arg(top).arg(top + scroll->height())));
+    }
+
     // The sidebar's ordinary switch: open one file, then pick the next.
     void theSidebarSwitchesTheDocument() {
         QTemporaryDir stateDirectory;
