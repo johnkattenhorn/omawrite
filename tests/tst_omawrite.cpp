@@ -5063,6 +5063,95 @@ private slots:
         QCOMPARE(window->property("dockedWidth").toInt(), int(panel->width()));
     }
 
+    // The sidebar's ordinary switch: open one file, then pick the next.
+    void theSidebarSwitchesTheDocument() {
+        QTemporaryDir stateDirectory;
+        QVERIFY(stateDirectory.isValid());
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+
+        auto put = [&](const QString &name, const QByteArray &body) {
+            QFile f(folder.filePath(name));
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+            f.write(body);
+            f.close();
+        };
+        put(QStringLiteral("CLAUDE.md"), "CLAUDE BODY");
+        put(QStringLiteral("README.md"), "README BODY");
+
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        WorkspaceSession session(stateDirectory.path());
+        QQmlEngine engine;
+        WindowManager manager(&session, &engine, QUrl::fromLocalFile(mainQmlPath));
+        Backend *backend = manager.createWindow();
+        QVERIFY(backend);
+
+        backend->setFolder(QUrl::fromLocalFile(folder.path()));
+
+        backend->open(QUrl::fromLocalFile(folder.filePath(QStringLiteral("CLAUDE.md"))));
+        QCOMPARE(backend->activeBufferText(), QStringLiteral("CLAUDE BODY"));
+
+        backend->open(QUrl::fromLocalFile(folder.filePath(QStringLiteral("README.md"))));
+        QCOMPARE(backend->activeBufferText(), QStringLiteral("README BODY"));
+        QCOMPARE(backend->buffers().size(), 1);
+    }
+
+    // Same click, but the session already holds a window that is not on screen
+    // -- what a crash, a kill or a second process leaves behind. The file the
+    // writer asks for is "already open" in that window, so the open used to be
+    // handed to it and dropped: the editor reloaded the document it already
+    // had, which reads as a flash with nothing changed, and the status line
+    // said the file had opened. The open lands here instead, and the record
+    // nothing is showing goes.
+    void opensAFileAWindowNobodyIsShowingClaims() {
+        QTemporaryDir stateDirectory;
+        QVERIFY(stateDirectory.isValid());
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+
+        auto put = [&](const QString &name, const QByteArray &body) {
+            QFile f(folder.filePath(name));
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+            f.write(body);
+            f.close();
+        };
+        put(QStringLiteral("CLAUDE.md"), "CLAUDE BODY");
+        put(QStringLiteral("README.md"), "README BODY");
+
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        WorkspaceSession session(stateDirectory.path());
+
+        // The window nobody can see, holding README.md.
+        const QString ghost = session.createWindow(-1, -1, 1280, 820, false);
+        session.createTab(ghost, QUrl::fromLocalFile(folder.filePath(QStringLiteral("README.md"))),
+                          QStringLiteral("README BODY"), 0, 0, 0, false);
+        session.saveNow();
+
+        QQmlEngine engine;
+        WindowManager manager(&session, &engine, QUrl::fromLocalFile(mainQmlPath));
+        Backend *backend = manager.createWindow();
+        QVERIFY(backend);
+        backend->setFolder(QUrl::fromLocalFile(folder.path()));
+
+        backend->open(QUrl::fromLocalFile(folder.filePath(QStringLiteral("CLAUDE.md"))));
+        QCOMPARE(backend->activeBufferText(), QStringLiteral("CLAUDE BODY"));
+
+        backend->open(QUrl::fromLocalFile(folder.filePath(QStringLiteral("README.md"))));
+        QCOMPARE(backend->activeBufferText(), QStringLiteral("README BODY"));
+        QCOMPARE(backend->fileUrl(),
+                 QUrl::fromLocalFile(folder.filePath(QStringLiteral("README.md"))));
+        QCOMPARE(backend->status(), QStringLiteral("Opened README.md"));
+
+        // The window nothing was showing is gone rather than left to refuse
+        // every later open of the file it claimed.
+        for (const QVariant &value : session.windows())
+            QVERIFY(value.toMap().value(QStringLiteral("id")).toString() != ghost);
+    }
+
 private:
     // A stand-in for the Claude command line: it records the arguments, the
     // working directory and the stdin it was handed, then prints whatever

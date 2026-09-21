@@ -106,7 +106,7 @@ Backend *WindowManager::createWindow(const QString &windowId) {
     }
     backend->setParentWindow(qobject_cast<QWindow *>(window));
     connect(backend, &Backend::newWindowRequested, this, [this]() { createWindow(); });
-    connect(backend, &Backend::openTabRequested, this, &WindowManager::activateTab);
+    backend->setTabActivator([this](const QString &tabId) { return activateTab(tabId); });
     connect(backend, &Backend::activeBufferChanged, this, [this, backend]() {
         const QVariantMap tab = m_workspaceSession->tab(backend->activeBufferId());
         if (tab.value(QStringLiteral("externalChanged")).toBool())
@@ -150,7 +150,7 @@ void WindowManager::setTextScale(qreal textScale) {
         window.backend->setTextScale(textScale);
 }
 
-void WindowManager::activateTab(const QString &tabId) {
+bool WindowManager::activateTab(const QString &tabId) {
     const QString windowId = m_workspaceSession->windowIdForTab(tabId);
     for (const WritingWindow &window : m_windows) {
         if (window.id != windowId)
@@ -161,8 +161,20 @@ void WindowManager::activateTab(const QString &tabId) {
             nativeWindow->raise();
             nativeWindow->requestActivate();
         }
-        return;
+        return true;
     }
+
+    // The session lists a window this process is not showing: what a crash, a
+    // kill or a second process leaves behind. Nothing can be handed to it, and
+    // leaving the record would go on refusing every open of a file it claims to
+    // hold, so it goes. Its tabs are unreachable either way; a process that
+    // really is showing that window still has their text and writes it back on
+    // its next save.
+    if (!windowId.isEmpty()) {
+        m_workspaceSession->removeWindow(windowId);
+        m_workspaceSession->saveNow();
+    }
+    return false;
 }
 
 void WindowManager::closeWindow(const QString &windowId) {

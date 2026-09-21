@@ -11,6 +11,7 @@
 #include <QUrl>
 #include <QVariantList>
 #include <QVariantMap>
+#include <functional>
 #include <memory>
 
 #include "buffersession.h"
@@ -61,6 +62,15 @@ public:
 
     void setParentWindow(QWindow *window);
     QWindow *parentWindow() const;
+
+    // How this backend hands a file to the tab already holding it. It answers
+    // false when that tab is not on screen -- a window the session still lists
+    // but nothing is showing -- and the caller then opens the file here rather
+    // than dropping it. A backend with no window manager behind it has no
+    // activator, which reads the same way: nobody else can take this, so open
+    // it.
+    using TabActivator = std::function<bool(const QString &)>;
+    void setTabActivator(TabActivator activator);
 
     // Open a file and put the caret on a 1-based line, or leave it where the
     // tab left it when the line is 0. With newTab the file opens beside what is
@@ -203,7 +213,6 @@ signals:
     void documentLoaded();
     void previewChanged();
     void newWindowRequested();
-    void openTabRequested(const QString &tabId);
     void windowEmptied();
     void focusModeChanged();
 
@@ -216,6 +225,7 @@ private:
     // Take the newer text without asking, for a document holding no local
     // changes. The caret keeps its place.
     void reloadSilently();
+    bool activateExistingTab(const QString &tabId);
     void loadActiveBuffer();
     void persistActiveBuffer();
     void setFileUrl(const QUrl &url);
@@ -286,6 +296,7 @@ private:
     bool m_externalChangeDismissed = false;
     bool m_applicationClosing = false;
     bool m_restoringActiveBuffer = false;
+    TabActivator m_activateTab;
     bool m_ignoringInitialCursorReset = false;
     // Set where this document takes a name without having read what is on it,
     // and cleared the moment anything settles the question -- a read, a write,

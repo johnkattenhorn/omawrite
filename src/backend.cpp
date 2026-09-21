@@ -548,6 +548,18 @@ void Backend::saveAgentPanelWidth(int width) {
     QSettings().setValue(agentPanelWidthSetting, width);
 }
 
+void Backend::setTabActivator(TabActivator activator) {
+    m_activateTab = std::move(activator);
+}
+
+// True only when the tab is really on screen now. A session that still lists a
+// window nothing is showing -- what a crash or a second process leaves behind
+// -- answers false, so the caller opens the file rather than handing it to a
+// window that cannot take it.
+bool Backend::activateExistingTab(const QString &tabId) {
+    return m_activateTab && m_activateTab(tabId);
+}
+
 void Backend::open(const QUrl &url) {
     openPath(url, true);
 }
@@ -583,14 +595,17 @@ void Backend::openPath(const QUrl &url, bool mayStartNewFile) {
         return;
     }
 
-    // A file some tab already holds is brought forward rather than opened twice.
+    // A file some tab already holds is brought forward rather than opened twice
+    // -- but only if that tab is really there. A window the session lists and
+    // nothing is showing used to swallow the open: the editor reloaded the tab
+    // it already had, which reads as a flash with the same document still in
+    // it, and the status line said the file had opened.
     if (m_workspaceSession) {
         const QString openTabId = m_workspaceSession->findOpenLocalFile(url);
-        if (!openTabId.isEmpty()) {
-            emit openTabRequested(openTabId);
+        if (!openTabId.isEmpty() && activateExistingTab(openTabId))
             return;
-        }
-    } else {
+    }
+    if (!m_workspaceSession) {
         for (const QVariant &value : m_bufferSession.buffers()) {
             const QVariantMap buffer = value.toMap();
             if (buffer.value(QStringLiteral("fileUrl")).toString() != url.toString())
@@ -669,12 +684,20 @@ void Backend::openPath(const QUrl &url, bool mayStartNewFile) {
     // browsing into thirty tabs waiting at the next start. Ctrl+T is what adds
     // a tab, and that is the only thing that does.
     const QString text = QString::fromUtf8(contents);
+    // Both of these answer whether the tab took the file. Ignoring that answer
+    // was how an open went missing: the reload below put the old document back
+    // on screen and the status line below called it opened.
     if (m_workspaceSession) {
         const QString reuse = m_workspaceSession->activeTabId(m_workspaceWindowId);
-        if (reuse.isEmpty())
-            m_workspaceSession->createTab(m_workspaceWindowId, url, text, 0, 0, 0, false);
-        else
-            m_workspaceSession->updateTab(m_workspaceWindowId, reuse, url, text, 0, 0, 0, false);
+        const bool stored = reuse.isEmpty()
+            ? !m_workspaceSession->createTab(m_workspaceWindowId, url, text, 0, 0, 0, false)
+                  .isEmpty()
+            : m_workspaceSession->updateTab(m_workspaceWindowId, reuse, url, text,
+                                            0, 0, 0, false);
+        if (!stored) {
+            setStatus(QStringLiteral("Could not open %1.").arg(targetName));
+            return;
+        }
     } else {
         QString reuse = m_bufferSession.activeBufferId();
         if (reuse.isEmpty())
@@ -1667,12 +1690,14 @@ bool Backend::saveTo(const QUrl &url) {
     }
 
     // Two tabs writing to one file would each overwrite the other, so the
-    // save is refused and the tab already holding it is brought forward.
+    // save is refused and the tab already holding it is brought forward. A tab
+    // that cannot be brought forward is not holding the file in any sense the
+    // writer can see, so it is no reason to refuse the save.
     if (m_workspaceSession) {
         const QString openTabId = m_workspaceSession->findOpenLocalFile(url);
-        if (!openTabId.isEmpty() && openTabId != activeBufferId()) {
+        if (!openTabId.isEmpty() && openTabId != activeBufferId()
+                && activateExistingTab(openTabId)) {
             setStatus(QStringLiteral("This file is already open."));
-            emit openTabRequested(openTabId);
             return false;
         }
     }

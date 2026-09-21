@@ -2,6 +2,41 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-21 — An open that cannot be handed on is opened here
+
+Picking a second file in the sidebar could leave the first one on screen. The
+document flashed, the status line said the new file had opened, and nothing had
+changed.
+
+`openPath` brings a file forward rather than opening it twice, and asked the
+session which tab holds it. `WorkspaceSession::findOpenLocalFile` searches every
+window the session file lists, not the windows on screen, and
+`WindowManager::activateTab` returned without a word when the tab belonged to a
+window this process is not showing — the kind of record a crash, a kill or a
+second process leaves behind. The open went to that window and stopped there.
+`loadActiveBuffer()` then reloaded the tab that was already showing, which is
+the flash, and `setStatus("Opened ...")` ran regardless. Two more return values
+were dropped on the way: `createTab` and `updateTab` both answer whether the tab
+took the file, and neither answer was read.
+
+`activateTab` now says whether it landed, and the backend reaches it through a
+`TabActivator` callback rather than a fire-and-forget signal, so the answer
+comes back. An open that cannot be handed on is opened in the window the writer
+is looking at. `createTab` and `updateTab` are checked, and a refusal says
+"Could not open" instead of claiming success.
+
+A window record nothing is showing is removed when it turns up, rather than left
+to refuse every later open of the file it claims. Its tabs were unreachable in
+any case, and a process that really is showing that window still holds their
+text and writes it back on its next save.
+
+What put a window record there in the first place is not settled. `main.cpp`
+short-circuits a second instance only for a launch that names a file
+(`Cli::Request::Open`), so a bare launch starts a second process that shares one
+`session.json`; `Remote::claim` runs afterwards and its answer is discarded.
+Two processes do run at once — that much is confirmed — but the step from there
+to an orphaned window record is still a guess.
+
 ## 2026-09-21 — `origin` is this fork, `upstream` is omacom
 
 The remotes were named the other way round: `origin` pointed at

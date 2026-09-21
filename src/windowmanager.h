@@ -38,7 +38,7 @@ private:
     };
 
     Backend *createWindow(const QString &windowId);
-    void activateTab(const QString &tabId);
+    bool activateTab(const QString &tabId);
     void closeWindow(const QString &windowId);
     void syncFileWatcher();
     void handleFileChange(const QString &path);
