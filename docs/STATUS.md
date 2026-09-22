@@ -1,6 +1,6 @@
 # Status
 
-Last updated 2026-09-21.
+Last updated 2026-09-22.
 
 A fork of [omacom/omawrite](https://github.com/omacom/omawrite), the Markdown
 writing app Omarchy 4.0 ships. Upstream keeps it deliberately minimal. This fork
@@ -10,17 +10,17 @@ drive.
 
 ## Where it is
 
-Branch `custom`, 143 commits ahead of `upstream/master` (`8f98892`).
-The `agent-panel` branch is merged into it and has been deleted. 146 tests
-pass; `recentresOnlyWhenFocusModeMovesTheEditor`
-(`tests/tst_omawrite.cpp:3514`) is flaky and has failed one run in five. Clean
-build, no warnings.
+Branch `custom`, ahead of `upstream/master` (`8f98892`);
+`git rev-list --count 8f98892..HEAD` says by how many. The `agent-panel` branch
+is merged into it and has been deleted. The suite passes;
+`recentresOnlyWhenFocusModeMovesTheEditor` is flaky and has failed one run in
+five. Clean build, no warnings.
 Pushed to
 [johnkattenhorn/omawrite](https://github.com/johnkattenhorn/omawrite).
 
 ```sh
 ./bin/build    # build/omawrite
-./bin/test     # 146 tests
+./bin/test     # builds and runs the suite, and says how many tests it is
 ```
 
 ## What is in it
@@ -94,6 +94,13 @@ Written here:
   narrows as the docks take their width, with a one-time move off the old
   65-character default.
 - **Preview scroll sync** — the toggle used to drop the reader at the top.
+- **Preview follows the tab that comes forward** — with the preview
+  showing, opening a file in a new tab or switching tabs left the previous
+  document rendered while the tab strip, title, word count and status line
+  had all moved on. A render was only ever asked for from the editor's
+  `onTextChanged`, which returns early while `backend.restoringActiveBuffer`
+  is up, exactly when a tab's text loads. It is asked for on
+  `documentLoaded` instead, which fires after every load whoever caused it.
 - **Link hover** — reworked from #8 onto #40's existing hover, rather than
   adding a third MouseArea over the editor.
 
