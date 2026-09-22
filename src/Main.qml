@@ -746,6 +746,13 @@ ApplicationWindow {
         }
 
         function onDocumentLoaded() {
+            // A tab coming forward loads its text while restoringActiveBuffer
+            // is up, and the editor's onTextChanged returns early on that flag
+            // -- so nothing asked for a new render and the preview kept showing
+            // the document that was there before. The load itself is what says
+            // the text is different, whoever caused it.
+            if (win.previewVisible)
+                previewTimer.restart();
             editor.cursorPosition = editor.length;
             win.settlingCaret = true;
             win.settleCaret();

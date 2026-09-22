@@ -796,6 +796,49 @@ private slots:
         QCOMPARE(editor->property("text").toString(), QStringLiteral("# Hello\n\n**world**"));
     }
 
+    void refreshesThePreviewWhenAnotherTabComesForward() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        QTemporaryDir previewTabState;
+        QVERIFY(previewTabState.isValid());
+        Backend backend(previewTabState.path());
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        engine.rootContext()->setContextProperty(QStringLiteral("agent"),
+                                                  new AgentSession(&engine));
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> window(component.create());
+        QVERIFY2(window, qPrintable(component.errorString()));
+
+        QObject *editor = window->findChild<QObject *>(QStringLiteral("sourceEditor"));
+        QObject *preview = window->findChild<QObject *>(QStringLiteral("renderedPreview"));
+        QVERIFY(editor);
+        QVERIFY(preview);
+
+        const QString first = backend.activeBufferId();
+        editor->setProperty("text", QStringLiteral("# First document"));
+        const QString second = backend.newBuffer();
+        QVERIFY(!second.isEmpty());
+        editor->setProperty("text", QStringLiteral("# Second document"));
+
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "togglePreview"));
+        QVERIFY(preview->property("visible").toBool());
+        QTRY_VERIFY(preview->property("text").toString()
+                        .contains(QStringLiteral("Second document")));
+
+        // The tab that comes forward is the one the reader is now looking at.
+        // The preview used to keep the document that had just left on screen,
+        // because the load happens under the restore flag the editor's text
+        // handler returns early on.
+        QVERIFY(backend.selectBuffer(first));
+        QTRY_VERIFY(preview->property("text").toString()
+                        .contains(QStringLiteral("First document")));
+        QVERIFY(!preview->property("text").toString()
+                     .contains(QStringLiteral("Second document")));
+    }
+
     void scalesTextWithDesktopTextSize() {
         Backend backend;
         QQmlEngine engine;
