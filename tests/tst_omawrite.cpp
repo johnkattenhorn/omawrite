@@ -4727,6 +4727,36 @@ private slots:
                  "the separator shows");
     }
 
+    void spacesTouchingCodeBlocksAlike() {
+        Backend backend;
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> window(createMainWindow(engine, component, backend));
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QTextDocument *rendered = attachPreview(window.data(), backend);
+        QVERIFY(rendered);
+
+        // Two fences are kept apart by a hidden paragraph and an indented
+        // block beside a fence by how Qt marks them. The page should not show
+        // which: both pairs sit the same distance apart.
+        backend.setPreviewMarkdown(QStringLiteral(
+            "Para.\n\n```sh\none\n```\n\n```sh\ntwo\n```\n\nPara.\n\n    three\n\n```py\nfour\n```\n\nEnd.\n"));
+        QAbstractTextDocumentLayout *layout = rendered->documentLayout();
+        const auto box = [&](const QString &line) {
+            return layout->frameBoundingRect(const_cast<QTextFrame *>(codeFrameOf(*rendered, line)));
+        };
+        const qreal fenced = box(QStringLiteral("two")).top() - box(QStringLiteral("one")).bottom();
+        const qreal mixed = box(QStringLiteral("four")).top() - box(QStringLiteral("three")).bottom();
+        QVERIFY2(fenced > 0 && qAbs(fenced - mixed) < 0.5,
+                 qPrintable(QStringLiteral("%1px between two fences, %2px between indented and fenced")
+                                .arg(fenced).arg(mixed)));
+        // Half a gap from the block above and a whole one to the block below:
+        // no closer than prose sits to a block.
+        const qreal padding = codeFrameOf(*rendered, QStringLiteral("one"))->frameFormat().padding();
+        QVERIFY2(qAbs(fenced - 1.5 * padding) < 0.5,
+                 qPrintable(QStringLiteral("%1px apart with %2px padding").arg(fenced).arg(padding)));
+    }
+
     void padsCodeBlocksEvenlyInThePreview() {
         Backend backend;
         QQmlEngine engine;
