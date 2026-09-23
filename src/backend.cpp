@@ -470,18 +470,23 @@ void Backend::setPreviewMarkdown(const QString &markdown) {
     // The preview keeps HTML off, so a README's centred header shows as its
     // tags, which reads like a fault in the preview unless it says why. With
     // the flag Qt keeps HTML as text and without it Qt takes the tags out, so
-    // the two readings differ exactly when the file has HTML in it. The
-    // second reading loads nothing: a <link> would otherwise have Qt read
-    // whatever path it names.
+    // the two readings differ exactly when the file has HTML in it. Both are
+    // read aside rather than against the preview, whose code blocks have been
+    // moved into frames, and neither loads anything: a <link> would otherwise
+    // have Qt read whatever path it names.
     class NothingLoaded final : public QTextDocument {
     protected:
         QVariant loadResource(int, const QUrl &) override { return {}; }
     };
     bool leavesHtmlOut = false;
     if (markdown.contains(QLatin1Char('<'))) {
+        NothingLoaded asText;
+        asText.setMarkdown(markdown, QTextDocument::MarkdownFeatures(
+                                         QTextDocument::MarkdownDialectGitHub)
+                                         | QTextDocument::MarkdownNoHTML);
         NothingLoaded withHtml;
         withHtml.setMarkdown(markdown, QTextDocument::MarkdownDialectGitHub);
-        leavesHtmlOut = withHtml.toPlainText() != m_previewDocument->toPlainText();
+        leavesHtmlOut = withHtml.toPlainText() != asText.toPlainText();
     }
     // Said once for a document rather than on every render while it is being
     // written. Only here, where the window asks for a render because the
