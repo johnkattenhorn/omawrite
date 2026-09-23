@@ -2,6 +2,32 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-23 — Touching code blocks are told apart, and images and code set solid
+
+Two fenced blocks with only a blank line between them came out of Qt's importer
+as one run of code lines with nothing between, so the preview drew them as one
+block. There is nothing in the document to split on. So before Qt reads the
+file, `separateAdjacentFences` puts a paragraph holding only a zero-width space
+between a closing fence and an opening one that follows it, under the same
+quote or list prefix. The typography pass hides that paragraph. Only the text
+handed to Qt changes; the file does not. Fences are the only case that needs it:
+an indented block next to a fenced one, or two fences in different languages,
+already differ in how Qt marks them, so a run also ends where the fence or the
+language changes.
+
+A line holding an image had the same problem at a larger scale. The 40% was 40%
+of the image's height, so a 1235px diagram had about 490px of blank page under
+it. A line with an image in it is set at 100%, with a text size of bottom margin
+so the text under it sits a paragraph break away rather than as a caption. A
+test measuring a layout of the document made on the side missed this: it only
+shows where the preview's own `TextEdit` lays the page out, so the test asks the
+preview for positions.
+
+The deeper bottom padding came from the 140% line height, which Qt adds below
+each line. Under the last line of a block that room landed on top of the
+padding. The last line is now set at 100%. `QTextFrameFormat` has one padding for
+all four sides, so taking the room away was the fix, not adding to the top.
+
 ## 2026-09-23 — Print loads its images before Qt clones the document
 
 Print rendered into a plain `QTextDocument` with HTML on and no base URL, so it

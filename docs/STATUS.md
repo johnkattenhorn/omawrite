@@ -107,7 +107,11 @@ Written here:
   indented code lines now sits on a tint mixed from the theme's own page and
   text colours, with padding round it, in lists and quotes as well as at the top
   level. A theme change restyles a preview that is already showing. Inline code
-  spans are left as they were.
+  spans are left as they were. Blocks that touch stay separate blocks, and the
+  last line of each is set solid, so the padding is even above and below.
+- **Images without a gap under them** — a line holding an image is set at
+  100% rather than the text's 140%, which left 40% of a diagram's height blank
+  below it.
 - **Preview image refusals that hold** — a refused image used to fall
   through to Qt's own handler, which read and drew it from any path, so the
   allow-list only governed half the preview. A refusal is now a transparent
@@ -132,12 +136,9 @@ Written here:
 
 ## Known
 
-- Two code blocks with only a blank line between them render as one tinted
-  block. Qt's importer leaves nothing between them to split on: each line is a
-  block marked as code, and the two runs are consecutive.
-- The 140% line height puts its extra space under each line, so a block's
-  bottom padding reads a little deeper than its top, most visibly on a
-  one-line block. `QTextFrameFormat` has one padding for all four sides.
+- Two code blocks that touch sit about 17px apart when both are fenced and
+  about 11px apart otherwise (measured 2026-09-23 at 12px text). Both read as
+  separate blocks.
 - `recentresOnlyWhenFocusModeMovesTheEditor` is flaky.
 - A tab's full text is cached in `session.json`, so a large document makes a
   large session file: a 522KB `STATUS.md` gave a 533KB session.

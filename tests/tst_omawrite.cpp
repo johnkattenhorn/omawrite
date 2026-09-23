@@ -4630,10 +4630,15 @@ private slots:
 
         // And the lines sit as far apart as the source view's do: same words,
         // same rhythm, so the toggle changes the rendering and nothing else.
+        // The last line of a code block is the exception, set solid so the
+        // block's padding is even.
         for (QTextBlock block = rendered.begin(); block.isValid(); block = block.next()) {
             if (block.text().isEmpty())
                 continue;
-            QCOMPARE(block.blockFormat().lineHeight(), Backend::lineHeightPercent());
+            const QTextFrame *frame = codeFrameOf(rendered, block.text());
+            const bool lastInCode = frame && rendered.findBlock(frame->lastPosition()) == block;
+            QCOMPARE(block.blockFormat().lineHeight(),
+                     lastInCode ? qreal(100) : Backend::lineHeightPercent());
             QCOMPARE(block.blockFormat().lineHeightType(),
                      int(QTextBlockFormat::ProportionalHeight));
         }
@@ -4641,6 +4646,117 @@ private slots:
         // The heading ratios are the editor's, whatever size it is set to.
         QCOMPARE(MarkdownHighlighter::headingPointSize(20, 1) / (20 * 0.75), qreal(2.3));
         QCOMPARE(MarkdownHighlighter::headingPointSize(12, 6) / (12 * 0.75), qreal(1.3));
+    }
+
+    void setsAnImageWithoutRoomUnderIt() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        QImage picture(40, 200, QImage::Format_RGB32);
+        picture.fill(Qt::green);
+        QVERIFY(QDir().mkpath(folder.filePath(QStringLiteral("images"))));
+        QVERIFY(picture.save(folder.filePath(QStringLiteral("images/tall.png"))));
+        const QString path = folder.filePath(QStringLiteral("note.md"));
+        QVERIFY(writeFile(path, "Above.\n\n![tall](images/tall.png)\n\nBelow.\n"));
+
+        Backend backend;
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> window(createMainWindow(engine, component, backend));
+        QVERIFY2(window, qPrintable(component.errorString()));
+        backend.open(QUrl::fromLocalFile(path));
+        QVERIFY(QMetaObject::invokeMethod(window.data(), "togglePreview"));
+        QObject *preview = window->findChild<QObject *>(QStringLiteral("renderedPreview"));
+        QVERIFY(preview);
+        auto *rendered = preview->property("textDocument").value<QQuickTextDocument *>()->textDocument();
+        QTRY_VERIFY(blockContaining(rendered, QStringLiteral("Below.")).isValid());
+
+        // A line holding an image took the 140% line height like any other,
+        // so a tall diagram had 40% of its own height left blank under it.
+        // Measured where the preview draws, which is not a layout of the
+        // document made on the side.
+        const auto top = [&](int position) {
+            QRectF rect;
+            QMetaObject::invokeMethod(preview, "positionToRectangle", Q_RETURN_ARG(QRectF, rect),
+                                      Q_ARG(int, position));
+            return rect.top();
+        };
+        int imageAt = -1;
+        for (QTextBlock block = rendered->begin(); block.isValid() && imageAt < 0; block = block.next()) {
+            for (auto it = block.begin(); !it.atEnd(); ++it) {
+                if (it.fragment().charFormat().isImageFormat())
+                    imageAt = it.fragment().position();
+            }
+        }
+        QVERIFY(imageAt >= 0);
+        const qreal gap = top(blockContaining(rendered, QStringLiteral("Below.")).position())
+            - (top(imageAt) + 200);
+        QVERIFY2(gap < 200 * 0.2, qPrintable(QStringLiteral("%1px under a 200px image").arg(gap)));
+        // Text lines keep the document's rhythm.
+        QCOMPARE(blockContaining(rendered, QStringLiteral("Below.")).blockFormat().lineHeight(),
+                 Backend::lineHeightPercent());
+    }
+
+    void keepsAdjacentCodeBlocksApart() {
+        Backend backend;
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> window(createMainWindow(engine, component, backend));
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QTextDocument *rendered = attachPreview(window.data(), backend);
+        QVERIFY(rendered);
+
+        // Qt leaves nothing between two code blocks written one after the
+        // other, so without help they came out as one tinted block.
+        backend.setPreviewMarkdown(QStringLiteral(
+            "Para.\n\n```sh\none\n```\n\n```sh\ntwo\n```\n```py\nthree\n```\n\n"
+            "    four\n\n```\nfive\n```\n\n> ```\n> six\n> ```\n>\n> ```\n> seven\n> ```\n"));
+        const QStringList lines = {QStringLiteral("one"), QStringLiteral("two"),
+                                   QStringLiteral("three"), QStringLiteral("four"),
+                                   QStringLiteral("five"), QStringLiteral("six"),
+                                   QStringLiteral("seven")};
+        for (const QString &line : lines)
+            QVERIFY2(codeFrameOf(*rendered, line), qPrintable(line + QStringLiteral(" is not set apart")));
+        for (qsizetype i = 1; i < lines.size(); ++i) {
+            QVERIFY2(codeFrameOf(*rendered, lines.at(i - 1)) != codeFrameOf(*rendered, lines.at(i)),
+                     qPrintable(lines.at(i - 1) + QStringLiteral(" and ") + lines.at(i)
+                                + QStringLiteral(" share a block")));
+        }
+        // What keeps them apart is not shown.
+        QVERIFY2(!rendered->toPlainText().contains(QChar(0x200B))
+                     || !blockContaining(rendered, QString(QChar(0x200B))).isVisible(),
+                 "the separator shows");
+    }
+
+    void padsCodeBlocksEvenlyInThePreview() {
+        Backend backend;
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> window(createMainWindow(engine, component, backend));
+        QVERIFY2(window, qPrintable(component.errorString()));
+        QTextDocument *rendered = attachPreview(window.data(), backend);
+        QVERIFY(rendered);
+
+        // The 140% line height puts its extra room under each line, so the
+        // last line of a block used to sit further from the bottom edge than
+        // the first sits from the top.
+        backend.setPreviewMarkdown(QStringLiteral(
+            "Para.\n\n```\none line\n```\n\nPara.\n\n```\nfirst\nlast\n```\n"));
+        QAbstractTextDocumentLayout *layout = rendered->documentLayout();
+        for (const QString &text : {QStringLiteral("one line"), QStringLiteral("last")}) {
+            auto *frame = const_cast<QTextFrame *>(codeFrameOf(*rendered, text));
+            QVERIFY2(frame, qPrintable(text));
+            const QTextBlock first = frame->firstCursorPosition().block();
+            const QTextBlock last = rendered->findBlock(frame->lastPosition());
+            const QTextLine firstLine = first.layout()->lineAt(0);
+            const QTextLine lastLine = last.layout()->lineAt(last.layout()->lineCount() - 1);
+            const QRectF box = layout->frameBoundingRect(frame);
+            const qreal top = layout->blockBoundingRect(first).top() + firstLine.y() - box.top();
+            const qreal bottom = box.bottom() - (layout->blockBoundingRect(last).top()
+                                                 + lastLine.y() + lastLine.ascent()
+                                                 + lastLine.descent());
+            QVERIFY2(qAbs(top - bottom) <= 1.5,
+                     qPrintable(QStringLiteral("%1: %2 above, %3 below").arg(text).arg(top).arg(bottom)));
+        }
     }
 
     void setsCodeBlocksApartInThePreview() {
@@ -4699,12 +4815,16 @@ private slots:
                 QVERIFY2(!codeFrameOf(rendered, line),
                          qPrintable(QStringLiteral("\"%1\" was set apart as code").arg(line)));
 
-            // The typography inside the block is the rest of the document's.
+            // The typography inside the block is the rest of the document's,
+            // except that a block's last line is set solid, so the room under
+            // it is the padding and nothing more.
             for (QTextBlock block = rendered.begin(); block.isValid(); block = block.next()) {
                 if (block.text().isEmpty() || !block.isVisible())
                     continue;
+                const QTextFrame *frame = codeFrameOf(rendered, block.text());
+                const bool lastInBlock = frame && rendered.findBlock(frame->lastPosition()) == block;
                 QVERIFY2(qFuzzyCompare(block.blockFormat().lineHeight(),
-                                       Backend::lineHeightPercent()),
+                                       lastInBlock ? 100 : Backend::lineHeightPercent()),
                          qPrintable(QStringLiteral("\"%1\" is set at %2%")
                                         .arg(block.text())
                                         .arg(block.blockFormat().lineHeight())));
@@ -5620,6 +5740,14 @@ private:
     // It is drawn through the layout's own image handler rather than asked of
     // the document, because the handler reads a file itself when the
     // document has no answer for it.
+    static QTextBlock blockContaining(QTextDocument *document, const QString &text) {
+        for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+            if (block.text().contains(text))
+                return block;
+        }
+        return {};
+    }
+
     static QHash<QString, bool> imagesIn(QTextDocument *document) {
         QHash<QString, bool> images;
         QTextObjectInterface *handler =
