@@ -228,6 +228,8 @@ remembered across launches. Desktop text scaling is applied on top of this base 
 
 - Qt 6.5 or newer: `qt6-base`, `qt6-declarative`, `qt6-quickcontrols2`
 - `xdg-desktop-portal` and a portal backend
+- Optional: `claude` on your `PATH` for the Claude panel (`claude-code` in the
+  Omarchy package repository). Everything else works without it.
 
 The iA Writer Mono font is bundled under the SIL Open Font License 1.1; see
 `fonts/OFL.txt`. The font is copyright Information Architects Inc. and based on

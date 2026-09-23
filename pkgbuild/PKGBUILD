@@ -14,6 +14,7 @@ url='https://github.com/johnkattenhorn/omawrite'
 license=('MIT')
 install='omawrite.install'
 depends=('qt6-base>=6.5' 'qt6-declarative>=6.5' 'xdg-desktop-portal')
+optdepends=('claude-code: the Claude panel (Alt+G)')
 makedepends=('gcc' 'make' 'qt6-base>=6.5' 'qt6-declarative>=6.5')
 source=()
 sha256sums=()
