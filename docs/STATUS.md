@@ -101,6 +101,13 @@ Written here:
   `onTextChanged`, which returns early while `backend.restoringActiveBuffer`
   is up, exactly when a tab's text loads. It is asked for on
   `documentLoaded` instead, which fires after every load whoever caused it.
+- **Code blocks set apart in the preview** — the preview sets everything in one
+  monospace face, so the font change Qt gives a code block disappeared, and a
+  paragraph ran straight into the command output under it. Each run of fenced or
+  indented code lines now sits on a tint mixed from the theme's own page and
+  text colours, with padding round it, in lists and quotes as well as at the top
+  level. A theme change restyles a preview that is already showing. Inline code
+  spans are left as they were.
 - **Preview image refusals that hold** — a refused image used to fall
   through to Qt's own handler, which read and drew it from any path, so the
   allow-list only governed half the preview. A refusal is now a transparent
@@ -123,6 +130,12 @@ Written here:
 - Print (`Backend::printDocument`) renders with HTML on and none of the
   preview's resource rules, so a printout can differ from the preview and can
   draw an image the preview refuses.
+- Two code blocks with only a blank line between them render as one tinted
+  block. Qt's importer leaves nothing between them to split on: each line is a
+  block marked as code, and the two runs are consecutive.
+- The 140% line height puts its extra space under each line, so a block's
+  bottom padding reads a little deeper than its top, most visibly on a
+  one-line block. `QTextFrameFormat` has one padding for all four sides.
 - `recentresOnlyWhenFocusModeMovesTheEditor` is flaky.
 - A tab's full text is cached in `session.json`, so a large document makes a
   large session file: a 522KB `STATUS.md` gave a 533KB session.
