@@ -2,6 +2,53 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-23 — Mermaid is parked
+
+Issue #3 asked for ```` ```mermaid ```` blocks to draw as diagrams in the
+preview. The preview is a `QTextDocument` with no JavaScript, so the only route
+that keeps it is `mmdc` (mermaid-cli) drawing a PNG per block, cached by a hash
+of its source. That works: on 2026-09-23 it drew an 11-node flowchart in 0.9 s.
+
+It is still parked. `mermaid-cli` brings Node and headless Chromium, about
+325 MiB, run as a background process from a text editor, with a cache folder,
+an exception to the image allow-list and new ways to fail. Making it optional
+keeps the install light but not the code. Upstream would not take it, and once
+the preview runs one outside renderer the case for KaTeX, PlantUML and Graphviz
+is made. GitHub, Obsidian or `mmdc` itself draw the diagram where it is needed.
+
+If it comes back, two things change the cost. A general hook (a code-block
+language mapped to a command the user sets, off by default) ships no
+dependency. And a text renderer such as `mermaid-ascii`, a single Go binary,
+draws into the code block itself, with no image and so no allow-list exception.
+
+## 2026-09-23 — HTML stays off in the preview, and the preview says so
+
+Issue #1 asked for a README's HTML header to render. A lane built it, and it
+took more than dropping `MarkdownNoHTML`. Qt's importer pours each piece of
+HTML into the block it is already in, so a heading runs into the paragraph
+under it, and it counts `<x` against `</` and `/>`, so one `<br>` or `<img>`
+hides the rest of the document. Working round that took about 250 lines: a
+hand-written CommonMark HTML-block lifter, a void-tag rewriter that skips code
+spans and fences, and fragments put back after the import. It still drew a logo
+alone in `<p align="center">` at the left margin, left links in Qt's blue, did
+not centre Markdown inside `<div align="center">`, and broke on indented HTML.
+
+That is more parser than this editor should carry for a partial result, so the
+flag stays. The issue allowed for it: the status line says "HTML shows as text
+in the preview." once per document. It is found by reading the file again with
+HTML on, into a document that loads nothing, and comparing the text: the flag
+keeps HTML as text and its absence takes the tags out, so the two differ exactly
+when there is HTML. A `<` in prose or tags in code read the same both ways and
+say nothing.
+
+The lane found a real hole while doing it, and that part is kept. When
+`loadResource` returned nothing, Qt's `QTextImageHandler` read the file itself
+from the name as written and drew it, so `![x](/any/path.png)` or a `file://`
+image was drawn whatever the allow-list said. A refused image is now answered
+with a transparent pixel. The test draws each image through the layout's own
+handler, because asking the document for the resource is exactly the check the
+fallback went round.
+
 ## 2026-09-21 — The handover is keyed on the file, not on the kind
 
 Sending a bare launch to the running Omawrite was keyed on `Request::Kind`, and
