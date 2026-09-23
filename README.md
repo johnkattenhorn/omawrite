@@ -91,7 +91,9 @@ window is closed while `--open` does not.
   while you are writing. It starts closed.
 - `Ctrl+Shift+P` toggles the Markdown preview. It is drawn in the same font as
   the source view, at the same size, with headings on the same ratios, so
-  switching between the two changes what is rendered and nothing else.
+  switching between the two changes what is rendered and nothing else. HTML in
+  the file is not rendered: the preview shows its tags as text, and the status
+  line says so.
 - `Alt+G` opens the Claude panel on the right of the window, and closes it
   again. `Ctrl+Shift+A` copies the whole conversation, which **copy** in the
   panel's header also does. See [Claude beside the document](docs/AGENT.md).

@@ -4,6 +4,8 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QQuickTextDocument>
+#include <QAbstractTextDocumentLayout>
+#include <QPainter>
 #include <QTextBlock>
 #include <QTextFragment>
 #include <QTextDocument>
@@ -2694,6 +2696,79 @@ private slots:
         clipboard->clear();
     }
 
+    void refusesAnImageTheAllowListRefuses() {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const QString outside = root.filePath(QStringLiteral("outside.png"));
+        const QString inside = root.filePath(QStringLiteral("doc/images/inside.png"));
+        QVERIFY(writeImage(outside));
+        QVERIFY(writeImage(inside));
+        const QString path = root.filePath(QStringLiteral("doc/README.md"));
+        QVERIFY(writeFile(path, "# Readme\n"));
+
+        Backend backend;
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> window(createMainWindow(engine, component, backend));
+        QVERIFY2(window, qPrintable(component.errorString()));
+        backend.open(QUrl::fromLocalFile(path));
+        QTextDocument *rendered = attachPreview(window.data(), backend);
+        QVERIFY(rendered);
+
+        // Every file here exists and is a picture, so what refuses one is the
+        // rule and not a missing file. The last is inside the document's
+        // folder, which leaves the allow-list as the only thing refusing it.
+        struct Case { QString target; bool loads; };
+        const QList<Case> cases = {
+            {QStringLiteral("images/inside.png"), true},
+            {QStringLiteral("https://example.com/logo.png"), false},
+            {QStringLiteral("../outside.png"), false},
+            {outside, false},
+            {QUrl::fromLocalFile(inside).toString(), false},
+        };
+        for (const Case &test : cases) {
+            const QString source = QStringLiteral("![x](") + test.target + QStringLiteral(")\n");
+            backend.setPreviewMarkdown(source);
+            const QHash<QString, bool> images = imagesIn(rendered);
+            QVERIFY2(images.contains(test.target), qPrintable(source));
+            QVERIFY2(images.value(test.target) == test.loads, qPrintable(source));
+        }
+    }
+
+    void saysWhenThePreviewShowsHtmlAsText() {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath(QStringLiteral("README.md"));
+        QVERIFY(writeFile(path, "# Readme\n"));
+
+        Backend backend;
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> window(createMainWindow(engine, component, backend));
+        QVERIFY2(window, qPrintable(component.errorString()));
+        backend.open(QUrl::fromLocalFile(path));
+        QVERIFY(attachPreview(window.data(), backend));
+
+        // Tags written as code, and a less-than in prose, show as text on
+        // purpose, so they say nothing.
+        backend.setPreviewMarkdown(QStringLiteral(
+            "# Readme\n\nIf a < b, write `<br>` for a break.\n\n```html\n<div>shown</div>\n```\n"));
+        QVERIFY2(!backend.status().contains(QStringLiteral("HTML")), qPrintable(backend.status()));
+
+        backend.setPreviewMarkdown(QStringLiteral(
+            "<h1 align=\"center\">Omawrite</h1>\n\nA Markdown writing app.\n"));
+        QVERIFY2(backend.status().contains(QStringLiteral("HTML")), qPrintable(backend.status()));
+
+        // Said once for the document, not again over whatever the status says
+        // next on every render while it is being written.
+        QVERIFY(!backend.createFolder(QStringLiteral("notes")).isEmpty());
+        const QString next = backend.status();
+        QVERIFY2(!next.contains(QStringLiteral("HTML")), qPrintable(next));
+        backend.setPreviewMarkdown(QStringLiteral(
+            "<h1 align=\"center\">Omawrite</h1>\n\nA Markdown writing app, still.\n"));
+        QCOMPARE(backend.status(), next);
+    }
+
     void restoresOrderedBuffersAndActiveCaret() {
         QTemporaryDir stateDirectory;
         QVERIFY(stateDirectory.isValid());
@@ -5379,6 +5454,54 @@ private:
         if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
             return false;
         return file.write(contents) == qint64(contents.size());
+    }
+
+    static bool writeImage(const QString &path) {
+        QImage image(6, 4, QImage::Format_RGB32);
+        image.fill(Qt::green);
+        return QDir().mkpath(QFileInfo(path).absolutePath()) && image.save(path);
+    }
+
+    // The document the window's preview draws, attached the way the
+    // pasted-image test does it.
+    static QTextDocument *attachPreview(QObject *window, Backend &backend) {
+        QObject *preview = window->findChild<QObject *>(QStringLiteral("renderedPreview"));
+        if (!preview)
+            return nullptr;
+        auto *quickDocument = preview->property("textDocument").value<QQuickTextDocument *>();
+        if (!quickDocument)
+            return nullptr;
+        backend.attachPreviewDocument(quickDocument);
+        return quickDocument->textDocument();
+    }
+
+    // Every image the preview holds, by the name it was written with, and
+    // whether the green picture writeImage left on disk is what gets drawn.
+    // It is drawn through the layout's own image handler rather than asked of
+    // the document, because the handler reads a file itself when the
+    // document has no answer for it.
+    static QHash<QString, bool> imagesIn(QTextDocument *document) {
+        QHash<QString, bool> images;
+        QTextObjectInterface *handler =
+            document->documentLayout()->handlerForObject(QTextFormat::ImageObject);
+        if (!handler)
+            return images;
+        for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+            for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
+                const QTextCharFormat format = it.fragment().charFormat();
+                if (!format.isImageFormat())
+                    continue;
+                QImage canvas(6, 4, QImage::Format_ARGB32_Premultiplied);
+                canvas.fill(Qt::transparent);
+                QPainter painter(&canvas);
+                handler->drawObject(&painter, QRectF(0, 0, 6, 4), document,
+                                    it.fragment().position(), format);
+                painter.end();
+                images.insert(format.toImageFormat().name(),
+                              canvas.pixelColor(3, 2) == QColor(Qt::green));
+            }
+        }
+        return images;
     }
 
     // Points HOME at a scratch tree holding one colors.toml, and puts it back on the way out.

@@ -13,6 +13,7 @@
 #include <QVariantMap>
 #include <functional>
 #include <memory>
+#include <optional>
 
 #include "buffersession.h"
 #include "workspacesession.h"
@@ -231,6 +232,7 @@ private:
     void setFileUrl(const QUrl &url);
     void setModified(bool modified);
     void setStatus(const QString &status);
+    void renderPreview();
     void setExternalChangePending(bool pending);
     bool saveTo(const QUrl &url);
     QUrl suggestedSaveUrl() const;
@@ -287,6 +289,8 @@ private:
     QPointer<PreviewDocument> m_previewDocument;
     QFileSystemWatcher m_previewImageWatcher;
     QString m_previewMarkdown;
+    // The document the preview last said shows HTML as text, so it is said once.
+    std::optional<QUrl> m_previewHtmlSaidFor;
     QString m_lastDocumentText;
     QByteArray m_lastKnownFileContents;
     bool m_hasKnownFileContents = false;
