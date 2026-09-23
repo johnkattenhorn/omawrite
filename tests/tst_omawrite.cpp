@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QTextBlock>
 #include <QTextFragment>
+#include <QTextFrame>
 #include <QTextDocument>
 #include "buffersession.h"
 #include "workspacesession.h"
@@ -4553,7 +4554,8 @@ private slots:
 
         // Qt renders Markdown at its own heading sizes, which is the thing
         // being corrected: the preview has to agree with the source view.
-        Backend::applyPreviewTypography(&rendered, editorFont);
+        Backend::applyPreviewTypography(&rendered, editorFont, QColor(QStringLiteral("#101010")),
+                                        QColor(QStringLiteral("#eeeeee")));
 
         const auto sizeOfLine = [&rendered](const QString &text) {
             for (QTextBlock block = rendered.begin(); block.isValid(); block = block.next()) {
@@ -4604,6 +4606,109 @@ private slots:
         // The heading ratios are the editor's, whatever size it is set to.
         QCOMPARE(MarkdownHighlighter::headingPointSize(20, 1) / (20 * 0.75), qreal(2.3));
         QCOMPARE(MarkdownHighlighter::headingPointSize(12, 6) / (12 * 0.75), qreal(1.3));
+    }
+
+    void setsCodeBlocksApartInThePreview() {
+        // A paragraph, then command output, then another paragraph and an
+        // indented block. Set in one face at one size, the paragraph and the
+        // output used to read as one piece of text.
+        const QString markdown = QStringLiteral(
+            "Run the listing.\n\n```sh\n$ ls\nnotes.md\n```\n\n"
+            "Or indent it.\n\n    indented output\n    second line\n\n"
+            "- an item\n\n  ```\n  code in a list\n  ```\n\nThe end.\n");
+        QFont editorFont(Backend::appFont());
+        editorFont.setPixelSize(12);
+
+        const struct {
+            const char *name;
+            QColor page;
+            QColor text;
+        } themes[] = {
+            {"dark", QColor(QStringLiteral("#101010")), QColor(QStringLiteral("#eeeeee"))},
+            {"light", QColor(QStringLiteral("#ffffff")), QColor(QStringLiteral("#222324"))},
+        };
+        QColor tints[2];
+        for (int i = 0; i < 2; ++i) {
+            QTextDocument rendered;
+            rendered.setDefaultFont(editorFont);
+            rendered.setMarkdown(markdown, QTextDocument::MarkdownDialectGitHub);
+            Backend::applyPreviewTypography(&rendered, editorFont, themes[i].page,
+                                            themes[i].text);
+
+            // A fenced block and an indented one are marked differently by Qt,
+            // and both are set apart: a tint of their own and room inside it.
+            for (const QString &line : {QStringLiteral("$ ls"), QStringLiteral("notes.md"),
+                                        QStringLiteral("indented output"),
+                                        QStringLiteral("code in a list")}) {
+                const QTextFrame *frame = codeFrameOf(rendered, line);
+                QVERIFY2(frame, qPrintable(QStringLiteral("%1: \"%2\" is not set apart")
+                                               .arg(QLatin1String(themes[i].name), line)));
+                const QTextFrameFormat format = frame->frameFormat();
+                QVERIFY(format.background().style() != Qt::NoBrush);
+                QVERIFY2(format.background().color() != themes[i].page,
+                         "the tint is the page colour, so nothing shows");
+                QVERIFY(format.padding() > 0);
+            }
+            // One run of lines is one block, not a strip per line.
+            QCOMPARE(codeFrameOf(rendered, QStringLiteral("$ ls")),
+                     codeFrameOf(rendered, QStringLiteral("notes.md")));
+            QCOMPARE(codeFrameOf(rendered, QStringLiteral("indented output")),
+                     codeFrameOf(rendered, QStringLiteral("second line")));
+            QVERIFY(codeFrameOf(rendered, QStringLiteral("$ ls"))
+                    != codeFrameOf(rendered, QStringLiteral("indented output")));
+
+            // The prose around them is left on the page.
+            for (const QString &line : {QStringLiteral("Run the listing."),
+                                        QStringLiteral("Or indent it."),
+                                        QStringLiteral("an item"), QStringLiteral("The end.")})
+                QVERIFY2(!codeFrameOf(rendered, line),
+                         qPrintable(QStringLiteral("\"%1\" was set apart as code").arg(line)));
+
+            // The typography inside the block is the rest of the document's.
+            for (QTextBlock block = rendered.begin(); block.isValid(); block = block.next()) {
+                if (block.text().isEmpty() || !block.isVisible())
+                    continue;
+                QVERIFY2(qFuzzyCompare(block.blockFormat().lineHeight(),
+                                       Backend::lineHeightPercent()),
+                         qPrintable(QStringLiteral("\"%1\" is set at %2%")
+                                        .arg(block.text())
+                                        .arg(block.blockFormat().lineHeight())));
+            }
+            tints[i] = codeFrameOf(rendered, QStringLiteral("$ ls"))
+                           ->frameFormat().background().color();
+        }
+        QVERIFY2(tints[0] != tints[1], "dark and light share one tint");
+
+        // A theme change restyles the preview that is already showing, rather
+        // than leaving the old theme's tint behind until the next keystroke.
+        ScopedTheme theme("");
+        QVERIFY(theme.ok);
+        Backend backend;
+        backend.setDarkMode(true);
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        component.setData("import QtQuick\nTextEdit {}\n", QUrl());
+        QScopedPointer<QObject> preview(component.create());
+        QVERIFY2(preview, qPrintable(component.errorString()));
+        auto *quickDocument = preview->property("textDocument").value<QQuickTextDocument *>();
+        QVERIFY(quickDocument);
+        backend.attachPreviewDocument(quickDocument);
+        backend.setPreviewMarkdown(markdown);
+
+        const auto liveTint = [quickDocument]() {
+            const QTextFrame *frame =
+                codeFrameOf(*quickDocument->textDocument(), QStringLiteral("$ ls"));
+            return frame ? frame->frameFormat().background().color() : QColor();
+        };
+        const QColor darkTint = liveTint();
+        QVERIFY(darkTint.isValid());
+        QVERIFY(darkTint != QColor(backend.themeBackground()));
+
+        backend.setDarkMode(false);
+        const QColor lightTint = liveTint();
+        QVERIFY(lightTint.isValid());
+        QVERIFY2(lightTint != darkTint, "the preview kept the old theme's tint");
+        QVERIFY(lightTint != QColor(backend.themeBackground()));
     }
 
     void takesTheWholeConversationInOneGo() {
@@ -5502,6 +5607,18 @@ private:
             }
         }
         return images;
+    }
+
+    // The innermost frame holding the line that reads exactly `text`, or null
+    // when that line sits on the page itself.
+    static const QTextFrame *codeFrameOf(const QTextDocument &document, const QString &text) {
+        for (QTextBlock block = document.begin(); block.isValid(); block = block.next()) {
+            if (block.text() != text)
+                continue;
+            const QTextFrame *frame = document.frameAt(block.position());
+            return frame == document.rootFrame() ? nullptr : frame;
+        }
+        return nullptr;
     }
 
     // Points HOME at a scratch tree holding one colors.toml, and puts it back on the way out.

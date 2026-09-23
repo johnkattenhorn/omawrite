@@ -20,6 +20,7 @@
 
 class MarkdownHighlighter;
 class PreviewDocument;
+class QColor;
 class QFont;
 class QTextDocument;
 class QWindow;
@@ -117,8 +118,10 @@ public:
     // Qt renders Markdown in its own sizes and its own fixed-pitch face, so
     // the preview and the source view disagreed about how big a heading is
     // and what code looks like. This puts the rendered document back on the
-    // sizes the editor draws, in the editor's own font.
-    static void applyPreviewTypography(QTextDocument *document, const QFont &editorFont);
+    // sizes the editor draws, in the editor's own font, and gives code blocks
+    // a ground of their own, mixed from the page and text colours.
+    static void applyPreviewTypography(QTextDocument *document, const QFont &editorFont,
+                                       const QColor &pageColor, const QColor &textColor);
     // The line height both views are set in, as a percentage.
     static qreal lineHeightPercent();
     // The measure used to be fixed at 65 characters and is now the window's

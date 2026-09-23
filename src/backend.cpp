@@ -33,6 +33,7 @@
 #include <QTextBlockFormat>
 #include <QTextCursor>
 #include <QTextFragment>
+#include <QTextFrame>
 #include <QTextDocument>
 #include <QTextStream>
 #include <QUrl>
@@ -469,18 +470,23 @@ void Backend::setPreviewMarkdown(const QString &markdown) {
     // The preview keeps HTML off, so a README's centred header shows as its
     // tags, which reads like a fault in the preview unless it says why. With
     // the flag Qt keeps HTML as text and without it Qt takes the tags out, so
-    // the two readings differ exactly when the file has HTML in it. The
-    // second reading loads nothing: a <link> would otherwise have Qt read
-    // whatever path it names.
+    // the two readings differ exactly when the file has HTML in it. Both are
+    // read aside rather than against the preview, whose code blocks have been
+    // moved into frames, and neither loads anything: a <link> would otherwise
+    // have Qt read whatever path it names.
     class NothingLoaded final : public QTextDocument {
     protected:
         QVariant loadResource(int, const QUrl &) override { return {}; }
     };
     bool leavesHtmlOut = false;
     if (markdown.contains(QLatin1Char('<'))) {
+        NothingLoaded asText;
+        asText.setMarkdown(markdown, QTextDocument::MarkdownFeatures(
+                                         QTextDocument::MarkdownDialectGitHub)
+                                         | QTextDocument::MarkdownNoHTML);
         NothingLoaded withHtml;
         withHtml.setMarkdown(markdown, QTextDocument::MarkdownDialectGitHub);
-        leavesHtmlOut = withHtml.toPlainText() != m_previewDocument->toPlainText();
+        leavesHtmlOut = withHtml.toPlainText() != asText.toPlainText();
     }
     // Said once for a document rather than on every render while it is being
     // written. Only here, where the window asks for a render because the
@@ -513,7 +519,8 @@ void Backend::renderPreview() {
                       | QTextDocument::MarkdownNoHTML);
     QFont editorFont = m_previewDocument->defaultFont();
     editorFont.setPixelSize(qRound(m_editorFontSize * m_textScale));
-    applyPreviewTypography(m_previewDocument, editorFont);
+    applyPreviewTypography(m_previewDocument, editorFont, QColor(m_themeBackground),
+                           QColor(m_themeForeground));
 }
 
 void Backend::setPreviewWidth(int width) {
@@ -2031,6 +2038,11 @@ void Backend::loadOmarchyTheme() {
         m_highlighter->setColors(m_themeBackground, m_themeForeground, m_themeAccent);
     }
 
+    // The preview's code blocks are tinted from these colours, so a preview
+    // already showing is restyled rather than left on the old theme.
+    if (m_previewDocument)
+        renderPreview();
+
     if (darkModeFlipped)
         emit darkModeChanged();
     emit themeColorsChanged();
@@ -2108,7 +2120,121 @@ qreal Backend::lineHeightPercent() {
     return typoraLineHeightPercent;
 }
 
-void Backend::applyPreviewTypography(QTextDocument *document, const QFont &editorFont) {
+// The share of the text colour mixed into the page for a code block's ground.
+// Enough to see where the block starts and stops, not so much that it reads as
+// a panel, and taken from the theme's own two colours so it lands on whatever
+// palette Omarchy is showing, the way the chrome's dim colours are mixed.
+constexpr qreal codeBlockTintShare = 0.08;
+
+static QColor codeBlockTint(const QColor &pageColor, const QColor &textColor) {
+    const auto mix = [](float page, float text) {
+        return page + (text - page) * float(codeBlockTintShare);
+    };
+    return QColor::fromRgbF(mix(pageColor.redF(), textColor.redF()),
+                            mix(pageColor.greenF(), textColor.greenF()),
+                            mix(pageColor.blueF(), textColor.blueF()));
+}
+
+// Qt marks a code block by giving it a monospace face and nothing else. Here
+// everything is already in one monospace face, so that difference is gone and a
+// paragraph runs straight into the command output under it. Each run of code
+// lines goes into a frame instead, which can carry a tint and padding. A block
+// format cannot: it has no padding, and margins on every line would leave the
+// tint striped between them.
+//
+// Qt marks a fenced block with its fence and its language, and an indented one
+// with an empty language and no fence, so the language is what finds both.
+static void setCodeBlocksApart(QTextDocument *document, const QColor &tint, qreal padding) {
+    struct Run {
+        int first;
+        int last;
+        qreal indent;
+    };
+    QList<Run> runs;
+    QTextFrame *const page = document->rootFrame();
+    for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+        const QTextBlockFormat format = block.blockFormat();
+        // Tables are the only frames the importer makes and no code sits in
+        // them, so a code line already inside a frame has been set apart.
+        if (!format.hasProperty(QTextFormat::BlockCodeLanguage)
+                || document->frameAt(block.position()) != page) {
+            continue;
+        }
+        const qreal indent = format.leftMargin() + format.indent() * document->indentWidth();
+        if (!runs.isEmpty() && runs.last().last == block.blockNumber() - 1
+                && qFuzzyCompare(runs.last().indent + 1, indent + 1)) {
+            runs.last().last = block.blockNumber();
+        } else {
+            runs.append({block.blockNumber(), block.blockNumber(), indent});
+        }
+    }
+
+    QTextFrameFormat ground;
+    ground.setBackground(tint);
+    ground.setPadding(padding);
+
+    // Last first, so the block numbers of the runs still to come stay true.
+    for (auto run = runs.crbegin(); run != runs.crend(); ++run) {
+        const QTextBlock first = document->findBlockByNumber(run->first);
+        const QTextBlock last = document->findBlockByNumber(run->last);
+        QTextCursor lines(document);
+        lines.setPosition(first.position());
+        lines.setPosition(last.position() + last.length() - 1, QTextCursor::KeepAnchor);
+
+        // The frame carries the indent of a block in a list or a quote from
+        // here, so the lines inside it start at its padding.
+        QTextBlockFormat flush;
+        flush.setLeftMargin(0);
+        flush.setIndent(0);
+        lines.mergeBlockFormat(flush);
+        // The first line inside a new frame starts on a blank block format,
+        // which would lose it the line height the rest are set at.
+        const QTextBlockFormat firstFormat = first.blockFormat();
+
+        QTextFrame *outermost = nullptr;
+        QTextFrame *tinted = nullptr;
+        if (run->indent > 0) {
+            // A Qt Quick TextEdit paints a frame's background across its
+            // margins as well, so a tinted frame cannot be moved in with a
+            // margin. An untinted frame around it holds the indent instead.
+            QTextFrameFormat indent;
+            indent.setLeftMargin(run->indent);
+            outermost = lines.insertFrame(indent);
+            QTextCursor inside = outermost->firstCursorPosition();
+            inside.setPosition(outermost->lastPosition(), QTextCursor::KeepAnchor);
+            tinted = inside.insertFrame(ground);
+            // The inner frame leaves an empty line either side of it in the
+            // outer one, which would double the gap the outer frame already
+            // has on the page.
+            for (QTextBlock block = document->findBlock(outermost->firstPosition());
+                 block.isValid() && block.position() <= outermost->lastPosition();
+                 block = block.next()) {
+                if (document->frameAt(block.position()) == outermost)
+                    block.setVisible(false);
+            }
+        } else {
+            outermost = tinted = lines.insertFrame(ground);
+        }
+        QTextCursor(document->findBlock(tinted->firstPosition())).setBlockFormat(firstFormat);
+
+        // Inserting a frame splits an empty line off either side of it, still
+        // marked as code. Those lines are the gap between the block and the
+        // prose, so they are held to a gap and nothing more.
+        QTextBlockFormat gap;
+        gap.setLineHeight(padding / 2, QTextBlockFormat::FixedHeight);
+        for (const int position : {outermost->firstPosition() - 1,
+                                   outermost->lastPosition() + 1}) {
+            const QTextBlock block = document->findBlock(position);
+            if (block.isValid() && block.text().isEmpty()
+                    && document->frameAt(block.position()) == page) {
+                QTextCursor(block).setBlockFormat(gap);
+            }
+        }
+    }
+}
+
+void Backend::applyPreviewTypography(QTextDocument *document, const QFont &editorFont,
+                                     const QColor &pageColor, const QColor &textColor) {
     if (!document)
         return;
 
@@ -2152,6 +2278,7 @@ void Backend::applyPreviewTypography(QTextDocument *document, const QFont &edito
             range.setCharFormat(format);
         }
     }
+    setCodeBlocksApart(document, codeBlockTint(pageColor, textColor), editorPixelSize);
     cursor.endEditBlock();
 }
 
