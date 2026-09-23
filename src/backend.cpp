@@ -55,6 +55,53 @@ const QString browseDirectorySetting = QStringLiteral("file/browseDirectory");
 const QString sidebarWidthSetting = QStringLiteral("window/sidebarWidth");
 const QString agentPanelWidthSetting = QStringLiteral("window/agentPanelWidth");
 
+// Qt's importer leaves nothing between two fenced code blocks written one
+// after the other: each line is a block marked as code and the two runs
+// touch, so the preview had no way to tell where one ended. A paragraph
+// holding only this character goes between them, under the same quote or
+// list prefix, and the typography pass hides it. Only what Qt reads changes;
+// the file does not.
+constexpr QChar codeBlockSeparator(0x200B);
+
+static QString separateAdjacentFences(const QString &markdown) {
+    static const QRegularExpression fenceRe(QStringLiteral("^([ >]*)(`{3,}|~{3,})(.*)$"));
+    const QStringList lines = markdown.split(QLatin1Char('\n'));
+    QStringList out;
+    QString openPrefix;
+    QString openFence;
+    bool inFence = false;
+    for (qsizetype i = 0; i < lines.size(); ++i) {
+        const QString &line = lines.at(i);
+        out << line;
+        const QRegularExpressionMatch fence = fenceRe.match(line);
+        if (!fence.hasMatch())
+            continue;
+        if (!inFence) {
+            inFence = true;
+            openPrefix = fence.captured(1);
+            openFence = fence.captured(2);
+            continue;
+        }
+        if (fence.captured(1) != openPrefix || fence.captured(2).front() != openFence.front()
+                || fence.captured(2).size() < openFence.size()
+                || !fence.captured(3).trimmed().isEmpty()) {
+            continue;
+        }
+        inFence = false;
+
+        // A closing fence. Past any blank lines under the same prefix, is the
+        // next thing another fence?
+        qsizetype next = i + 1;
+        while (next < lines.size() && QString(lines.at(next)).remove(QLatin1Char('>')).trimmed().isEmpty())
+            ++next;
+        const QRegularExpressionMatch following =
+            next < lines.size() ? fenceRe.match(lines.at(next)) : QRegularExpressionMatch();
+        if (following.hasMatch() && following.captured(1) == openPrefix)
+            out << openPrefix + codeBlockSeparator;
+    }
+    return out.join(QLatin1Char('\n'));
+}
+
 class PreviewDocument final : public QTextDocument {
 public:
     explicit PreviewDocument(std::function<void(const QString &)> imageLoaded, QObject *parent)
@@ -113,8 +160,9 @@ public:
         setImageRoot(baseUrl.toLocalFile());
         setAllowedImages(markdown, baseUrl);
         clear();
-        setMarkdown(markdown, QTextDocument::MarkdownFeatures(QTextDocument::MarkdownDialectGitHub)
-                                  | QTextDocument::MarkdownNoHTML);
+        setMarkdown(separateAdjacentFences(markdown),
+                    QTextDocument::MarkdownFeatures(QTextDocument::MarkdownDialectGitHub)
+                        | QTextDocument::MarkdownNoHTML);
     }
 
 protected:
@@ -2184,11 +2232,17 @@ static void setCodeBlocksApart(QTextDocument *document, const QColor &tint, qrea
         int first;
         int last;
         qreal indent;
+        QVariant fence;
+        QString language;
     };
     QList<Run> runs;
     QTextFrame *const page = document->rootFrame();
     for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
         const QTextBlockFormat format = block.blockFormat();
+        if (block.text() == codeBlockSeparator) {
+            block.setVisible(false);
+            continue;
+        }
         // Tables are the only frames the importer makes and no code sits in
         // them, so a code line already inside a frame has been set apart.
         if (!format.hasProperty(QTextFormat::BlockCodeLanguage)
@@ -2196,11 +2250,16 @@ static void setCodeBlocksApart(QTextDocument *document, const QColor &tint, qrea
             continue;
         }
         const qreal indent = format.leftMargin() + format.indent() * document->indentWidth();
+        // An indented block followed by a fenced one, or two fences in
+        // different languages, touch as well, and differ in how Qt marks them.
+        const QVariant fence = format.property(QTextFormat::BlockCodeFence);
+        const QString language = format.stringProperty(QTextFormat::BlockCodeLanguage);
         if (!runs.isEmpty() && runs.last().last == block.blockNumber() - 1
-                && qFuzzyCompare(runs.last().indent + 1, indent + 1)) {
+                && qFuzzyCompare(runs.last().indent + 1, indent + 1)
+                && runs.last().fence == fence && runs.last().language == language) {
             runs.last().last = block.blockNumber();
         } else {
-            runs.append({block.blockNumber(), block.blockNumber(), indent});
+            runs.append({block.blockNumber(), block.blockNumber(), indent, fence, language});
         }
     }
 
@@ -2222,6 +2281,12 @@ static void setCodeBlocksApart(QTextDocument *document, const QColor &tint, qrea
         flush.setLeftMargin(0);
         flush.setIndent(0);
         lines.mergeBlockFormat(flush);
+        // The 140% line height adds its room under each line, which under the
+        // last line would sit on top of the padding and leave more below the
+        // code than above it. The last line is set solid.
+        QTextBlockFormat solid;
+        solid.setLineHeight(100, QTextBlockFormat::ProportionalHeight);
+        QTextCursor(last).mergeBlockFormat(solid);
         // The first line inside a new frame starts on a blank block format,
         // which would lose it the line height the rest are set at.
         const QTextBlockFormat firstFormat = first.blockFormat();
@@ -2285,12 +2350,26 @@ void Backend::applyPreviewTypography(QTextDocument *document, const QFont &edito
     // reads as a change of document rather than of rendering.
     QTextBlockFormat spacing;
     spacing.setLineHeight(typoraLineHeightPercent, QTextBlockFormat::ProportionalHeight);
+    // The rhythm is for text. Scaled onto a line holding an image, the 40%
+    // is 40% of the image's height, left blank under a diagram.
+    QTextBlockFormat solid;
+    solid.setLineHeight(100, QTextBlockFormat::ProportionalHeight);
 
     QTextCursor cursor(document);
     cursor.beginEditBlock();
     for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+        bool holdsImage = false;
+        for (auto it = block.begin(); !it.atEnd() && !holdsImage; ++it)
+            holdsImage = it.fragment().charFormat().isImageFormat();
         QTextCursor blockCursor(block);
-        blockCursor.mergeBlockFormat(spacing);
+        blockCursor.mergeBlockFormat(holdsImage ? solid : spacing);
+        // Set solid, the text under an image sits as close as a caption. A
+        // text size of margin gives it the room a paragraph break has.
+        if (holdsImage && block.blockFormat().bottomMargin() < editorPixelSize) {
+            QTextBlockFormat room;
+            room.setBottomMargin(editorPixelSize);
+            blockCursor.mergeBlockFormat(room);
+        }
         const int heading = block.blockFormat().headingLevel();
         for (auto it = block.begin(); it != block.end(); ++it) {
             const QTextFragment fragment = it.fragment();
