@@ -105,6 +105,18 @@ public:
         }
     }
 
+    // The preview's rules in one place, so the printout keeps them too:
+    // images only from the allow-list under the document's folder, and HTML
+    // as the text it is written in.
+    void render(const QString &markdown, const QUrl &baseUrl) {
+        setBaseUrl(baseUrl);
+        setImageRoot(baseUrl.toLocalFile());
+        setAllowedImages(markdown, baseUrl);
+        clear();
+        setMarkdown(markdown, QTextDocument::MarkdownFeatures(QTextDocument::MarkdownDialectGitHub)
+                                  | QTextDocument::MarkdownNoHTML);
+    }
+
 protected:
     QVariant loadResource(int type, const QUrl &url) override {
         if (type != QTextDocument::ImageResource)
@@ -504,19 +516,10 @@ void Backend::renderPreview() {
         return;
     const QString &markdown = m_previewMarkdown;
 
-    const QUrl baseUrl = m_fileUrl.isLocalFile()
-        ? QUrl::fromLocalFile(QFileInfo(m_fileUrl.toLocalFile()).absolutePath() + QLatin1Char('/'))
-        : QUrl();
-    m_previewDocument->setBaseUrl(baseUrl);
-    m_previewDocument->setImageRoot(baseUrl.toLocalFile());
-    m_previewDocument->setAllowedImages(markdown, baseUrl);
     const QStringList watchedImages = m_previewImageWatcher.files();
     if (!watchedImages.isEmpty())
         m_previewImageWatcher.removePaths(watchedImages);
-    m_previewDocument->clear();
-    m_previewDocument->setMarkdown(
-        markdown, QTextDocument::MarkdownFeatures(QTextDocument::MarkdownDialectGitHub)
-                      | QTextDocument::MarkdownNoHTML);
+    m_previewDocument->render(markdown, documentFolderUrl());
     QFont editorFont = m_previewDocument->defaultFont();
     editorFont.setPixelSize(qRound(m_editorFontSize * m_textScale));
     applyPreviewTypography(m_previewDocument, editorFont, QColor(m_themeBackground),
@@ -1062,6 +1065,33 @@ void Backend::refreshBuffers() {
     emit buffersChanged();
 }
 
+QUrl Backend::documentFolderUrl() const {
+    return m_fileUrl.isLocalFile()
+        ? QUrl::fromLocalFile(QFileInfo(m_fileUrl.toLocalFile()).absolutePath() + QLatin1Char('/'))
+        : QUrl();
+}
+
+std::unique_ptr<QTextDocument> Backend::printableDocument(int imageWidth) const {
+    auto rendered = std::make_unique<PreviewDocument>([](const QString &) {}, nullptr);
+    rendered->setImageWidth(imageWidth);
+    rendered->render(currentDocumentText(), documentFolderUrl());
+    // QTextDocument::print draws a clone, and a clone has no base URL, so a
+    // relative image would no longer resolve. It does keep resources added by
+    // hand, so each image is loaded here, under the rules, and added under the
+    // name it is written with.
+    for (QTextBlock block = rendered->begin(); block.isValid(); block = block.next()) {
+        for (auto it = block.begin(); !it.atEnd(); ++it) {
+            const QTextCharFormat format = it.fragment().charFormat();
+            if (!format.isImageFormat())
+                continue;
+            const QUrl name(format.toImageFormat().name());
+            rendered->addResource(QTextDocument::ImageResource, name,
+                                  rendered->resource(QTextDocument::ImageResource, name));
+        }
+    }
+    return rendered;
+}
+
 void Backend::printDocument() {
     if (!m_document) {
         setStatus(QStringLiteral("There is no document to print."));
@@ -1076,13 +1106,18 @@ void Backend::printDocument() {
         dialog.windowHandle()->setTransientParent(m_parentWindow);
 
     if (dialog.exec() == QDialog::Accepted) {
-        QTextDocument rendered;
         const QScreen *screen = m_parentWindow ? m_parentWindow->screen()
                                                : QGuiApplication::primaryScreen();
-        rendered.setDefaultFont(printFont(m_document->defaultFont(),
-                                          screen ? screen->logicalDotsPerInchY() : 0.0));
-        rendered.setMarkdown(currentDocumentText());
-        rendered.print(&printer);
+        // Qt draws an image on paper at 96 pixels to the inch, and
+        // QTextDocument::print sets its own 2cm margin either side inside the
+        // printable area, so this is the text's width in image pixels.
+        const qreal textInches = printer.pageLayout().paintRect(QPageLayout::Inch).width()
+            - 2 * (2 / 2.54);
+        const int pageWidth = qRound(textInches * 96);
+        const std::unique_ptr<QTextDocument> rendered = printableDocument(pageWidth);
+        rendered->setDefaultFont(printFont(m_document->defaultFont(),
+                                           screen ? screen->logicalDotsPerInchY() : 0.0));
+        rendered->print(&printer);
     }
 }
 

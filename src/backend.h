@@ -136,6 +136,10 @@ public:
     static QString sanitizedEntryName(const QString &text);
     static QString tomlValue(const QString &text);
     static QFont printFont(const QFont &editorFont, qreal screenDpi);
+    // The document a print is made from, held to the preview's rules: HTML
+    // as text, and only the images the preview would load. Images are
+    // scaled down to imageWidth.
+    std::unique_ptr<QTextDocument> printableDocument(int imageWidth) const;
 
     Q_INVOKABLE void attachDocument(QObject *textDocument);
     Q_INVOKABLE void attachPreviewDocument(QObject *textDocument);
@@ -236,6 +240,8 @@ private:
     void setModified(bool modified);
     void setStatus(const QString &status);
     void renderPreview();
+    // The document's own folder, which relative images resolve against.
+    QUrl documentFolderUrl() const;
     void setExternalChangePending(bool pending);
     bool saveTo(const QUrl &url);
     QUrl suggestedSaveUrl() const;
