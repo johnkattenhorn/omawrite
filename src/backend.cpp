@@ -109,6 +109,23 @@ protected:
         if (type != QTextDocument::ImageResource)
             return QTextDocument::loadResource(type, url);
 
+        // Whenever the document answers with nothing, Qt's image handler
+        // reads the file itself, from the name as the source wrote it, and
+        // draws whatever it finds there. A refusal has to be an answer, so it
+        // is a transparent pixel.
+        const QImage image = loadImage(url);
+        if (!image.isNull())
+            return image;
+        static const QImage refused = [] {
+            QImage pixel(1, 1, QImage::Format_ARGB32_Premultiplied);
+            pixel.fill(Qt::transparent);
+            return pixel;
+        }();
+        return refused;
+    }
+
+private:
+    QImage loadImage(const QUrl &url) {
         const QString path = QFileInfo(url.toLocalFile()).canonicalFilePath();
         if (!url.isLocalFile() || path.isEmpty() || m_imageRoot.isEmpty()
                 || !path.startsWith(m_imageRoot + QLatin1Char('/'))
@@ -142,7 +159,6 @@ protected:
         return image;
     }
 
-private:
     void allowImage(const QString &destination, const QUrl &baseUrl) {
         const QUrl source(destination);
         if (source.isRelative() && source.scheme().isEmpty())
@@ -271,7 +287,7 @@ void Backend::initializeRuntime() {
                 if (QFile::exists(path))
                     m_previewImageWatcher.addPath(path);
                 if (m_previewDocument) {
-                    setPreviewMarkdown(m_previewMarkdown);
+                    renderPreview();
                     emit previewChanged();
                 }
             });
@@ -441,13 +457,46 @@ void Backend::attachPreviewDocument(QObject *textDocument) {
             [this](const QString &path) { watchPreviewImage(path); }, this);
     }
     quickDocument->setTextDocument(m_previewDocument);
-    setPreviewMarkdown(m_previewMarkdown);
+    renderPreview();
 }
 
 void Backend::setPreviewMarkdown(const QString &markdown) {
     m_previewMarkdown = markdown;
+    renderPreview();
     if (!m_previewDocument)
         return;
+
+    // The preview keeps HTML off, so a README's centred header shows as its
+    // tags, which reads like a fault in the preview unless it says why. With
+    // the flag Qt keeps HTML as text and without it Qt takes the tags out, so
+    // the two readings differ exactly when the file has HTML in it. The
+    // second reading loads nothing: a <link> would otherwise have Qt read
+    // whatever path it names.
+    class NothingLoaded final : public QTextDocument {
+    protected:
+        QVariant loadResource(int, const QUrl &) override { return {}; }
+    };
+    bool leavesHtmlOut = false;
+    if (markdown.contains(QLatin1Char('<'))) {
+        NothingLoaded withHtml;
+        withHtml.setMarkdown(markdown, QTextDocument::MarkdownDialectGitHub);
+        leavesHtmlOut = withHtml.toPlainText() != m_previewDocument->toPlainText();
+    }
+    // Said once for a document rather than on every render while it is being
+    // written. Only here, where the window asks for a render because the
+    // preview is showing: renderPreview's other callers run with it hidden.
+    if (!leavesHtmlOut) {
+        m_previewHtmlSaidFor.reset();
+    } else if (!m_previewHtmlSaidFor.has_value() || *m_previewHtmlSaidFor != m_fileUrl) {
+        m_previewHtmlSaidFor = m_fileUrl;
+        setStatus(QStringLiteral("HTML shows as text in the preview."));
+    }
+}
+
+void Backend::renderPreview() {
+    if (!m_previewDocument)
+        return;
+    const QString &markdown = m_previewMarkdown;
 
     const QUrl baseUrl = m_fileUrl.isLocalFile()
         ? QUrl::fromLocalFile(QFileInfo(m_fileUrl.toLocalFile()).absolutePath() + QLatin1Char('/'))
@@ -469,7 +518,7 @@ void Backend::setPreviewMarkdown(const QString &markdown) {
 
 void Backend::setPreviewWidth(int width) {
     if (m_previewDocument && m_previewDocument->setImageWidth(width))
-        setPreviewMarkdown(m_previewMarkdown);
+        renderPreview();
 }
 
 void Backend::openDialog() {
@@ -1624,7 +1673,7 @@ void Backend::setFileUrl(const QUrl &url) {
             applyFolder(parent, true);
     }
     if (m_previewDocument)
-        setPreviewMarkdown(m_previewMarkdown);
+        renderPreview();
 }
 
 void Backend::setModified(bool modified) {

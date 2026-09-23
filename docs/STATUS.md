@@ -1,6 +1,6 @@
 # Status
 
-Last updated 2026-09-22.
+Last updated 2026-09-23.
 
 A fork of [omacom/omawrite](https://github.com/omacom/omawrite), the Markdown
 writing app Omarchy 4.0 ships. Upstream keeps it deliberately minimal. This fork
@@ -101,6 +101,11 @@ Written here:
   `onTextChanged`, which returns early while `backend.restoringActiveBuffer`
   is up, exactly when a tab's text loads. It is asked for on
   `documentLoaded` instead, which fires after every load whoever caused it.
+- **Preview image refusals that hold** — a refused image used to fall
+  through to Qt's own handler, which read and drew it from any path, so the
+  allow-list only governed half the preview. A refusal is now a transparent
+  pixel. HTML stays off, and the status line says "HTML shows as text in the
+  preview." once per document that has some.
 - **Link hover** — reworked from #8 onto #40's existing hover, rather than
   adding a third MouseArea over the editor.
 
@@ -115,6 +120,9 @@ Written here:
 
 ## Known
 
+- Print (`Backend::printDocument`) renders with HTML on and none of the
+  preview's resource rules, so a printout can differ from the preview and can
+  draw an image the preview refuses.
 - `recentresOnlyWhenFocusModeMovesTheEditor` is flaky.
 - A tab's full text is cached in `session.json`, so a large document makes a
   large session file: a 522KB `STATUS.md` gave a 533KB session.
