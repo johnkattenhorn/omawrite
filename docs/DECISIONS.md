@@ -2,6 +2,20 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-23 — Touching code blocks are one and a half paddings apart
+
+Once touching blocks were kept apart, two fences sat further apart than an
+indented block beside a fence: 18px against 12px at 12px text. The difference
+was an accident. The hidden paragraph between two fences still kept Qt's 6px
+paragraph margins, and nothing sat between the other pair. That 6px is Qt's
+and does not scale with the text, so at any other size the two would not
+have matched either.
+
+The gap is now set on purpose. The hidden paragraph has no margins, and where
+two blocks touch, the second of the two half-padding gap lines becomes a whole
+padding. Touching blocks sit one and a half paddings apart whatever kept them
+apart, which at 12px is the 18px that prose sits from a block.
+
 ## 2026-09-23 — Touching code blocks are told apart, and images and code set solid
 
 Two fenced blocks with only a blank line between them came out of Qt's importer

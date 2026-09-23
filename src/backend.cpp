@@ -2240,6 +2240,13 @@ static void setCodeBlocksApart(QTextDocument *document, const QColor &tint, qrea
     for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
         const QTextBlockFormat format = block.blockFormat();
         if (block.text() == codeBlockSeparator) {
+            // Hidden, a paragraph still keeps its margins, which would put
+            // room between two fences that an indented block beside a fence
+            // does not get.
+            QTextBlockFormat none;
+            none.setTopMargin(0);
+            none.setBottomMargin(0);
+            QTextCursor(block).mergeBlockFormat(none);
             block.setVisible(false);
             continue;
         }
@@ -2330,6 +2337,28 @@ static void setCodeBlocksApart(QTextDocument *document, const QColor &tint, qrea
                 QTextCursor(block).setBlockFormat(gap);
             }
         }
+    }
+
+    // Where two blocks touch, their two half gaps meet with nothing between,
+    // which sets them closer than prose sets a block. The second is made a
+    // whole gap, the same wherever the touch came from.
+    const auto isGap = [&](const QTextBlock &block) {
+        const QTextBlockFormat format = block.blockFormat();
+        return block.isVisible() && block.text().isEmpty()
+            && document->frameAt(block.position()) == page
+            && format.lineHeightType() == QTextBlockFormat::FixedHeight
+            && qFuzzyCompare(format.lineHeight(), padding / 2);
+    };
+    QTextBlock previous;
+    for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+        if (!block.isVisible())
+            continue;
+        if (previous.isValid() && isGap(previous) && isGap(block)) {
+            QTextBlockFormat whole;
+            whole.setLineHeight(padding, QTextBlockFormat::FixedHeight);
+            QTextCursor(block).mergeBlockFormat(whole);
+        }
+        previous = block;
     }
 }
 

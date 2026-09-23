@@ -136,9 +136,6 @@ Written here:
 
 ## Known
 
-- Two code blocks that touch sit about 17px apart when both are fenced and
-  about 11px apart otherwise (measured 2026-09-23 at 12px text). Both read as
-  separate blocks.
 - `recentresOnlyWhenFocusModeMovesTheEditor` is flaky.
 - A tab's full text is cached in `session.json`, so a large document makes a
   large session file: a 522KB `STATUS.md` gave a 533KB session.
