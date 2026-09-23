@@ -113,6 +113,11 @@ Written here:
   allow-list only governed half the preview. A refusal is now a transparent
   pixel. HTML stays off, and the status line says "HTML shows as text in the
   preview." once per document that has some.
+- **Print under the preview's rules** — Print (`Ctrl+P`) renders through the
+  same `PreviewDocument` as the preview: HTML as text, and only the images the
+  preview would load, scaled to the text's width on the page. Before, it drew
+  an image from any absolute path and dropped every image beside the
+  document.
 - **Link hover** — reworked from #8 onto #40's existing hover, rather than
   adding a third MouseArea over the editor.
 
@@ -127,9 +132,6 @@ Written here:
 
 ## Known
 
-- Print (`Backend::printDocument`) renders with HTML on and none of the
-  preview's resource rules, so a printout can differ from the preview and can
-  draw an image the preview refuses.
 - Two code blocks with only a blank line between them render as one tinted
   block. Qt's importer leaves nothing between them to split on: each line is a
   block marked as code, and the two runs are consecutive.

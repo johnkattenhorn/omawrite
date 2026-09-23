@@ -2,6 +2,21 @@
 
 Non-obvious calls made in this fork, and why. Newest first.
 
+## 2026-09-23 — Print loads its images before Qt clones the document
+
+Print rendered into a plain `QTextDocument` with HTML on and no base URL, so it
+drew an image from any absolute path and could not find one written relative
+to the document, which is every image Omawrite pastes. It now renders through
+the preview's `PreviewDocument`, so both follow one set of rules.
+
+That alone printed no images at all. `QTextDocument::print` draws a clone, and
+`clone()` copies neither the base URL nor anything loaded so far, so in the
+clone a relative name no longer resolves. It does copy resources added with
+`addResource`, so `printableDocument` loads each image through the allow-list
+before printing and adds it under the name as written. The test checks the
+clone, parented the way `print` parents it, not the original: checking the
+original passed while the PDF was missing its image.
+
 ## 2026-09-23 — Code blocks in the preview go in frames, tinted from the theme
 
 Qt marks a code block with a monospace face and nothing else, and the preview

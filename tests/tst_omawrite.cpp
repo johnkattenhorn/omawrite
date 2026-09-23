@@ -2770,6 +2770,41 @@ private slots:
         QCOMPARE(backend.status(), next);
     }
 
+
+    void printsUnderThePreviewsRules() {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        const QString outside = root.filePath(QStringLiteral("outside.png"));
+        QVERIFY(writeImage(outside));
+        QVERIFY(writeImage(root.filePath(QStringLiteral("doc/images/inside.png"))));
+        const QString path = root.filePath(QStringLiteral("doc/README.md"));
+        const QByteArray source = "<h1 align=\"center\">Omawrite</h1>\n\n"
+                                  "![in](images/inside.png)\n\n![out](" + outside.toUtf8() + ")\n";
+        QVERIFY(writeFile(path, source));
+
+        Backend backend;
+        QQmlEngine engine;
+        QQmlComponent component(&engine);
+        QScopedPointer<QObject> window(createMainWindow(engine, component, backend));
+        QVERIFY2(window, qPrintable(component.errorString()));
+        backend.open(QUrl::fromLocalFile(path));
+
+        // A printout is the preview on paper, so it reads what the preview
+        // reads and nothing more: the image beside the document, not one from
+        // elsewhere on disk, and HTML as the text it is written in.
+        const std::unique_ptr<QTextDocument> printable = backend.printableDocument(600);
+        QVERIFY(printable);
+        // QTextDocument::print draws a clone parented to the document, and a
+        // clone keeps neither the base URL nor anything loaded so far, so the
+        // clone is what is checked.
+        QTextDocument *printed = printable->clone(printable.get());
+        const QHash<QString, bool> images = imagesIn(printed);
+        QVERIFY2(images.value(QStringLiteral("images/inside.png")), "the allowed image");
+        QVERIFY2(images.contains(outside) && !images.value(outside), "the image outside");
+        QVERIFY2(printed->toPlainText().contains(QStringLiteral("<h1 align=\"center\">")),
+                 qPrintable(printed->toPlainText()));
+    }
+
     void restoresOrderedBuffersAndActiveCaret() {
         QTemporaryDir stateDirectory;
         QVERIFY(stateDirectory.isValid());
